@@ -8,9 +8,13 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
-  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX
 } from "lucide-react";
 import { toast } from "sonner";
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from "../components/ui/alert-dialog";
 
 const EditProfile = () => {
   const navigate = useNavigate();
@@ -19,6 +23,8 @@ const EditProfile = () => {
   
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   
   // Form state
   const [name, setName] = useState(user?.name || "");
@@ -82,6 +88,23 @@ const EditProfile = () => {
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await axios.delete(`${API}/account`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Account deleted successfully");
+      logout();
+      navigate("/");
+    } catch (e) {
+      toast.error("Failed to delete account");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   const addLocation = () => {
@@ -473,6 +496,42 @@ const EditProfile = () => {
           <LogOut className="w-4 h-4 mr-2" />
           Log Out
         </Button>
+
+        {/* Delete Account */}
+        <Button 
+          onClick={() => setShowDeleteConfirm(true)}
+          variant="outline"
+          className="w-full border-red-600/50 text-red-500 hover:bg-red-600/10"
+          data-testid="delete-account-btn"
+        >
+          <UserX className="w-4 h-4 mr-2" />
+          Delete Account
+        </Button>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent className="bg-[#0a0a0a] border-white/10">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white">Delete your account?</AlertDialogTitle>
+              <AlertDialogDescription className="text-white/60">
+                This action cannot be undone. This will permanently delete your account, 
+                all your messages, followers, and remove your profile from PourPal.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-white/5 text-white border-white/10 hover:bg-white/10">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                {deleting ? "Deleting..." : "Yes, delete my account"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

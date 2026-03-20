@@ -502,6 +502,42 @@ async def root():
 async def health():
     return {"status": "healthy", "storage": storage_key is not None}
 
+# ===================== DELETE ACCOUNT =====================
+@api_router.delete("/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    
+    # Remove user from all followers/following lists
+    await db.users.update_many(
+        {"followers": user_id},
+        {"$pull": {"followers": user_id}}
+    )
+    await db.users.update_many(
+        {"following": user_id},
+        {"$pull": {"following": user_id}}
+    )
+    await db.users.update_many(
+        {"blocked_users": user_id},
+        {"$pull": {"blocked_users": user_id}}
+    )
+    
+    # Delete user's messages
+    await db.messages.delete_many({"$or": [{"sender_id": user_id}, {"recipient_id": user_id}]})
+    
+    # Delete user's invites
+    await db.invites.delete_many({"creator_id": user_id})
+    
+    # Remove user from invite recipient lists
+    await db.invites.update_many(
+        {"recipient_ids": user_id},
+        {"$pull": {"recipient_ids": user_id}}
+    )
+    
+    # Delete user
+    await db.users.delete_one({"id": user_id})
+    
+    return {"success": True, "message": "Account deleted"}
+
 # Include router and middleware
 app.include_router(api_router)
 
