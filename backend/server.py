@@ -210,7 +210,8 @@ async def register(req: RegisterRequest):
     
     await db.users.insert_one(user)
     
-    user_response = {k: v for k, v in user.items() if k != "password_hash"}
+    # Exclude _id (added by MongoDB) and password_hash from response
+    user_response = {k: v for k, v in user.items() if k not in ["password_hash", "_id"]}
     token = create_token(user_id)
     return {"token": token, "user": user_response}
 
