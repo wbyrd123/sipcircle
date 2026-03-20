@@ -29,8 +29,9 @@ const EditProfile = () => {
   // Form state
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
-  const [venmo, setVenmo] = useState(user?.venmo_username || "");
-  const [cashapp, setCashapp] = useState(user?.cashapp_username || "");
+  const [venmoLink, setVenmoLink] = useState(user?.venmo_link || "");
+  const [cashappLink, setCashappLink] = useState(user?.cashapp_link || "");
+  const [paypalLink, setPaypalLink] = useState(user?.paypal_link || "");
   const [locations, setLocations] = useState(user?.work_locations || []);
 
   const isBartender = user?.role === "bartender";
@@ -69,7 +70,7 @@ const EditProfile = () => {
     try {
       const endpoint = isBartender ? "/profile/bartender" : "/profile/customer";
       const data = isBartender 
-        ? { name, bio, venmo_username: venmo, cashapp_username: cashapp, work_locations: locations }
+        ? { name, bio, venmo_link: venmoLink, cashapp_link: cashappLink, paypal_link: paypalLink, work_locations: locations }
         : { name, bio };
       
       const response = await axios.put(`${API}${endpoint}`, data, {
@@ -278,24 +279,35 @@ const EditProfile = () => {
             {/* Payment Links */}
             <div className="glass-card p-6 space-y-4">
               <h2 className="text-lg font-semibold text-white">Payment Links</h2>
+              <p className="text-white/50 text-sm">Add your payment links so customers can send tips</p>
               <div className="space-y-2">
-                <Label className="text-white/80">Venmo Username</Label>
+                <Label className="text-white/80">Venmo Link</Label>
                 <Input
-                  value={venmo}
-                  onChange={(e) => setVenmo(e.target.value)}
-                  placeholder="yourvenmo"
+                  value={venmoLink}
+                  onChange={(e) => setVenmoLink(e.target.value)}
+                  placeholder="https://venmo.com/u/yourname"
                   className="input-dark"
                   data-testid="venmo-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-white/80">Cash App Username</Label>
+                <Label className="text-white/80">Cash App Link</Label>
                 <Input
-                  value={cashapp}
-                  onChange={(e) => setCashapp(e.target.value)}
-                  placeholder="yourcashapp"
+                  value={cashappLink}
+                  onChange={(e) => setCashappLink(e.target.value)}
+                  placeholder="https://cash.app/$yourname"
                   className="input-dark"
                   data-testid="cashapp-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white/80">PayPal Link</Label>
+                <Input
+                  value={paypalLink}
+                  onChange={(e) => setPaypalLink(e.target.value)}
+                  placeholder="https://paypal.me/yourname"
+                  className="input-dark"
+                  data-testid="paypal-input"
                 />
               </div>
             </div>

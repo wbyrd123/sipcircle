@@ -218,35 +218,47 @@ const BartenderProfile = () => {
         )}
 
         {/* Tip Links */}
-        {(bartender.venmo_username || bartender.cashapp_username) && (
+        {(bartender.venmo_link || bartender.cashapp_link || bartender.paypal_link) && (
           <div className="glass-card p-6">
             <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-primary" />
               Send a Tip
             </h2>
             <div className="space-y-3">
-              {bartender.venmo_username && (
+              {bartender.venmo_link && (
                 <a 
-                  href={`https://venmo.com/${bartender.venmo_username}`}
+                  href={bartender.venmo_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between p-4 rounded-lg bg-[#008CFF]/10 border border-[#008CFF]/30 hover:bg-[#008CFF]/20 transition-colors"
                   data-testid="venmo-link"
                 >
-                  <span className="text-white font-medium">Venmo @{bartender.venmo_username}</span>
+                  <span className="text-white font-medium">Venmo</span>
                   <ExternalLink className="w-4 h-4 text-[#008CFF]" />
                 </a>
               )}
-              {bartender.cashapp_username && (
+              {bartender.cashapp_link && (
                 <a 
-                  href={`https://cash.app/$${bartender.cashapp_username}`}
+                  href={bartender.cashapp_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between p-4 rounded-lg bg-[#00D632]/10 border border-[#00D632]/30 hover:bg-[#00D632]/20 transition-colors"
                   data-testid="cashapp-link"
                 >
-                  <span className="text-white font-medium">Cash App ${bartender.cashapp_username}</span>
+                  <span className="text-white font-medium">Cash App</span>
                   <ExternalLink className="w-4 h-4 text-[#00D632]" />
+                </a>
+              )}
+              {bartender.paypal_link && (
+                <a 
+                  href={bartender.paypal_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-4 rounded-lg bg-[#0070BA]/10 border border-[#0070BA]/30 hover:bg-[#0070BA]/20 transition-colors"
+                  data-testid="paypal-link"
+                >
+                  <span className="text-white font-medium">PayPal</span>
+                  <ExternalLink className="w-4 h-4 text-[#0070BA]" />
                 </a>
               )}
             </div>

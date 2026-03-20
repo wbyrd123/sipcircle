@@ -160,33 +160,40 @@ const BartenderDashboard = () => {
             Tip Links
           </h2>
           <div className="space-y-3">
-            {user.venmo_username ? (
+            {user.venmo_link ? (
               <a 
-                href={`https://venmo.com/${user.venmo_username}`}
+                href={user.venmo_link}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
               >
-                <span className="text-white">Venmo: @{user.venmo_username}</span>
+                <span className="text-white">Venmo</span>
                 <ExternalLink className="w-4 h-4 text-white/60" />
               </a>
-            ) : (
-              <p className="text-white/40 text-sm">No Venmo linked</p>
-            )}
-            {user.cashapp_username ? (
+            ) : null}
+            {user.cashapp_link ? (
               <a 
-                href={`https://cash.app/$${user.cashapp_username}`}
+                href={user.cashapp_link}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
               >
-                <span className="text-white">Cash App: ${user.cashapp_username}</span>
+                <span className="text-white">Cash App</span>
                 <ExternalLink className="w-4 h-4 text-white/60" />
               </a>
-            ) : (
-              <p className="text-white/40 text-sm">No Cash App linked</p>
-            )}
-            {!user.venmo_username && !user.cashapp_username && (
+            ) : null}
+            {user.paypal_link ? (
+              <a 
+                href={user.paypal_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <span className="text-white">PayPal</span>
+                <ExternalLink className="w-4 h-4 text-white/60" />
+              </a>
+            ) : null}
+            {!user.venmo_link && !user.cashapp_link && !user.paypal_link && (
               <Button 
                 onClick={() => navigate("/edit-profile")}
                 variant="outline"

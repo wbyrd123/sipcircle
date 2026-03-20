@@ -113,8 +113,9 @@ class WorkLocation(BaseModel):
 class BartenderProfileUpdate(BaseModel):
     name: Optional[str] = None
     bio: Optional[str] = None
-    venmo_username: Optional[str] = None
-    cashapp_username: Optional[str] = None
+    venmo_link: Optional[str] = None
+    cashapp_link: Optional[str] = None
+    paypal_link: Optional[str] = None
     work_locations: Optional[List[WorkLocation]] = None
 
 class CustomerProfileUpdate(BaseModel):
@@ -204,8 +205,9 @@ async def register(req: RegisterRequest):
     }
     
     if req.role == UserRole.BARTENDER:
-        user["venmo_username"] = ""
-        user["cashapp_username"] = ""
+        user["venmo_link"] = ""
+        user["cashapp_link"] = ""
+        user["paypal_link"] = ""
         user["work_locations"] = []
     
     await db.users.insert_one(user)

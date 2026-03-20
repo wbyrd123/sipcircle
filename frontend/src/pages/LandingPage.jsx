@@ -39,7 +39,7 @@ const LandingPage = () => {
             className="btn-secondary"
             data-testid="header-signin-btn"
           >
-            Sign In
+            Sign In / Register
           </Button>
         </header>
 
