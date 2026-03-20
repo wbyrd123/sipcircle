@@ -94,7 +94,7 @@ class RegisterRequest(BaseModel):
     role: str  # 'bartender' or 'customer'
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    identifier: str  # Can be email or username
     password: str
 
 class AuthResponse(BaseModel):
@@ -219,7 +219,22 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login", response_model=AuthResponse)
 async def login(req: LoginRequest):
-    user = await db.users.find_one({"email": req.email}, {"_id": 0})
+    # Check if identifier is email or username
+    identifier = req.identifier.lower().strip()
+    
+    # Try to find by email first, then by username
+    if "@" in identifier:
+        user = await db.users.find_one({"email": identifier}, {"_id": 0})
+    else:
+        user = await db.users.find_one({"username": identifier}, {"_id": 0})
+    
+    # If not found by the assumed type, try the other
+    if not user:
+        user = await db.users.find_one(
+            {"$or": [{"email": identifier}, {"username": identifier}]}, 
+            {"_id": 0}
+        )
+    
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     

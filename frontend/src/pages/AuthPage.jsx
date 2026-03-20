@@ -18,7 +18,7 @@ const AuthPage = () => {
   const [role, setRole] = useState(searchParams.get("role") || "customer");
   const [loading, setLoading] = useState(false);
   
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", name: "", username: "" });
 
   const from = location.state?.from?.pathname || (role === "bartender" ? "/dashboard" : "/home");
@@ -27,7 +27,7 @@ const AuthPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const user = await login(loginForm.email, loginForm.password);
+      const user = await login(loginForm.identifier, loginForm.password);
       toast.success(`Welcome back, ${user.name}!`);
       navigate(user.role === "bartender" ? "/dashboard" : "/home");
     } catch (e) {
@@ -105,16 +105,16 @@ const AuthPage = () => {
 
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="login-email" className="text-white/80">Email</Label>
+                      <Label htmlFor="login-identifier" className="text-white/80">Email or Username</Label>
                       <Input
-                        id="login-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={loginForm.email}
-                        onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                        id="login-identifier"
+                        type="text"
+                        placeholder="you@example.com or username"
+                        value={loginForm.identifier}
+                        onChange={(e) => setLoginForm({ ...loginForm, identifier: e.target.value })}
                         className="input-dark"
                         required
-                        data-testid="login-email-input"
+                        data-testid="login-identifier-input"
                       />
                     </div>
                     <div className="space-y-2">

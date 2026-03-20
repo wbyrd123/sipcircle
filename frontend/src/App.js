@@ -49,8 +49,8 @@ const AuthProvider = ({ children }) => {
     fetchUser();
   }, [token]);
 
-  const login = async (email, password) => {
-    const response = await axios.post(`${API}/auth/login`, { email, password });
+  const login = async (identifier, password) => {
+    const response = await axios.post(`${API}/auth/login`, { identifier, password });
     localStorage.setItem("pourpal_token", response.data.token);
     setToken(response.data.token);
     setUser(response.data.user);
