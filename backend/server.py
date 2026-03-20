@@ -101,13 +101,19 @@ class AuthResponse(BaseModel):
     token: str
     user: dict
 
+class Drink(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    ingredients: Optional[str] = None
+    price: Optional[str] = None
+
 class WorkLocation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     address: str
     schedule: List[dict] = []  # [{day: "Monday", start: "18:00", end: "02:00"}]
-    happy_hours: List[dict] = []  # [{day: "Monday", start: "17:00", end: "19:00", description: "Half off wells"}]
-    drinks: List[str] = []  # ["Margarita", "Old Fashioned"]
+    happy_hours: List[dict] = []  # [{day: "Monday", start: "17:00", end: "19:00", description: "Half off wells", drinks: [...]}]
+    signature_drinks: List[dict] = []  # [{name, ingredients, price}]
     maps_url: Optional[str] = None
 
 class BartenderProfileUpdate(BaseModel):

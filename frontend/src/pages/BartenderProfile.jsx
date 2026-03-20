@@ -312,29 +312,58 @@ const BartenderProfile = () => {
                         <Clock className="w-4 h-4" />
                         Happy Hour
                       </p>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {loc.happy_hours.map((hh, j) => (
                           <div key={j} className="p-3 rounded-lg bg-secondary/10 border border-secondary/20">
-                            <p className="text-white/80 text-sm">{hh.day}: {hh.start} - {hh.end}</p>
+                            <p className="text-white/80 text-sm font-medium">{hh.day}: {hh.start} - {hh.end}</p>
                             {hh.description && <p className="text-white/60 text-xs mt-1">{hh.description}</p>}
+                            
+                            {/* Happy Hour Drinks */}
+                            {hh.drinks && hh.drinks.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-secondary/20 space-y-2">
+                                {hh.drinks.map((drink, dk) => (
+                                  <div key={dk} className="flex items-start justify-between">
+                                    <div>
+                                      <p className="text-white text-sm font-medium">{drink.name}</p>
+                                      {drink.ingredients && (
+                                        <p className="text-white/50 text-xs">{drink.ingredients}</p>
+                                      )}
+                                    </div>
+                                    {drink.price && (
+                                      <span className="text-secondary font-semibold text-sm">{drink.price}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Drinks */}
-                  {loc.drinks && loc.drinks.length > 0 && (
+                  {/* Signature Drinks */}
+                  {loc.signature_drinks && loc.signature_drinks.length > 0 && (
                     <div className="mt-4">
-                      <p className="text-white/60 text-sm font-accent mb-2 flex items-center gap-2">
+                      <p className="text-primary text-sm font-accent mb-2 flex items-center gap-2">
                         <GlassWater className="w-4 h-4" />
                         Signature Drinks
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        {loc.drinks.map((drink, j) => (
-                          <span key={j} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm">
-                            {drink}
-                          </span>
+                      <div className="space-y-3">
+                        {loc.signature_drinks.map((drink, j) => (
+                          <div key={j} className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-white font-medium">{drink.name}</p>
+                                {drink.ingredients && (
+                                  <p className="text-white/50 text-sm mt-1">{drink.ingredients}</p>
+                                )}
+                              </div>
+                              {drink.price && (
+                                <span className="text-primary font-semibold">{drink.price}</span>
+                              )}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>

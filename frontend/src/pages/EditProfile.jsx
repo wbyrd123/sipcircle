@@ -165,18 +165,57 @@ const EditProfile = () => {
     setLocations(updated);
   };
 
-  const addDrink = (locIndex, drink) => {
-    if (!drink.trim()) return;
+  // Add signature drink
+  const addSignatureDrink = (locIndex) => {
     const updated = [...locations];
-    if (!updated[locIndex].drinks.includes(drink)) {
-      updated[locIndex].drinks.push(drink);
-      setLocations(updated);
+    if (!updated[locIndex].signature_drinks) {
+      updated[locIndex].signature_drinks = [];
     }
+    updated[locIndex].signature_drinks.push({ 
+      id: crypto.randomUUID(),
+      name: "", 
+      ingredients: "", 
+      price: "" 
+    });
+    setLocations(updated);
   };
 
-  const removeDrink = (locIndex, drinkIndex) => {
+  const updateSignatureDrink = (locIndex, drinkIndex, field, value) => {
     const updated = [...locations];
-    updated[locIndex].drinks = updated[locIndex].drinks.filter((_, i) => i !== drinkIndex);
+    updated[locIndex].signature_drinks[drinkIndex][field] = value;
+    setLocations(updated);
+  };
+
+  const removeSignatureDrink = (locIndex, drinkIndex) => {
+    const updated = [...locations];
+    updated[locIndex].signature_drinks = updated[locIndex].signature_drinks.filter((_, i) => i !== drinkIndex);
+    setLocations(updated);
+  };
+
+  // Add happy hour drink
+  const addHappyHourDrink = (locIndex, hhIndex) => {
+    const updated = [...locations];
+    if (!updated[locIndex].happy_hours[hhIndex].drinks) {
+      updated[locIndex].happy_hours[hhIndex].drinks = [];
+    }
+    updated[locIndex].happy_hours[hhIndex].drinks.push({ 
+      id: crypto.randomUUID(),
+      name: "", 
+      ingredients: "", 
+      price: "" 
+    });
+    setLocations(updated);
+  };
+
+  const updateHappyHourDrink = (locIndex, hhIndex, drinkIndex, field, value) => {
+    const updated = [...locations];
+    updated[locIndex].happy_hours[hhIndex].drinks[drinkIndex][field] = value;
+    setLocations(updated);
+  };
+
+  const removeHappyHourDrink = (locIndex, hhIndex, drinkIndex) => {
+    const updated = [...locations];
+    updated[locIndex].happy_hours[hhIndex].drinks = updated[locIndex].happy_hours[hhIndex].drinks.filter((_, i) => i !== drinkIndex);
     setLocations(updated);
   };
 
@@ -452,45 +491,110 @@ const EditProfile = () => {
                         <Input
                           value={hh.description}
                           onChange={(e) => updateHappyHour(locIndex, hhIndex, "description", e.target.value)}
-                          placeholder="Half off wells, $5 margaritas..."
+                          placeholder="General description (e.g., Half off all wells)"
                           className="input-dark"
                         />
+                        
+                        {/* Happy Hour Drinks */}
+                        <div className="mt-3 pt-3 border-t border-secondary/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-white/60 text-xs font-accent">Happy Hour Drinks</span>
+                            <Button 
+                              onClick={() => addHappyHourDrink(locIndex, hhIndex)} 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-secondary text-xs h-6 px-2"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Add Drink
+                            </Button>
+                          </div>
+                          {hh.drinks?.map((drink, drinkIndex) => (
+                            <div key={drink.id || drinkIndex} className="p-2 rounded-lg bg-black/20 mb-2 space-y-2">
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  value={drink.name}
+                                  onChange={(e) => updateHappyHourDrink(locIndex, hhIndex, drinkIndex, "name", e.target.value)}
+                                  placeholder="Drink name"
+                                  className="input-dark flex-1 h-9 text-sm"
+                                />
+                                <Input
+                                  value={drink.price}
+                                  onChange={(e) => updateHappyHourDrink(locIndex, hhIndex, drinkIndex, "price", e.target.value)}
+                                  placeholder="$5"
+                                  className="input-dark w-20 h-9 text-sm"
+                                />
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => removeHappyHourDrink(locIndex, hhIndex, drinkIndex)}
+                                  className="text-white/40 hover:text-red-400 h-9 w-9"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                              <Input
+                                value={drink.ingredients}
+                                onChange={(e) => updateHappyHourDrink(locIndex, hhIndex, drinkIndex, "ingredients", e.target.value)}
+                                placeholder="Ingredients (e.g., Tequila, lime, triple sec)"
+                                className="input-dark h-9 text-sm"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Drinks */}
+                  {/* Signature Drinks */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-primary flex items-center gap-2">
                         <GlassWater className="w-4 h-4" />
                         Signature Drinks
                       </Label>
+                      <Button 
+                        onClick={() => addSignatureDrink(locIndex)} 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-primary text-xs"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add Drink
+                      </Button>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {loc.drinks?.map((drink, dIndex) => (
-                        <span 
-                          key={dIndex}
-                          className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm flex items-center gap-2"
-                        >
-                          {drink}
-                          <button onClick={() => removeDrink(locIndex, dIndex)} className="hover:text-red-400">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <Input
-                      placeholder="Add a drink and press Enter"
-                      className="input-dark"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addDrink(locIndex, e.target.value);
-                          e.target.value = "";
-                        }
-                      }}
-                    />
+                    {loc.signature_drinks?.map((drink, drinkIndex) => (
+                      <div key={drink.id || drinkIndex} className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            value={drink.name}
+                            onChange={(e) => updateSignatureDrink(locIndex, drinkIndex, "name", e.target.value)}
+                            placeholder="Drink name"
+                            className="input-dark flex-1"
+                          />
+                          <Input
+                            value={drink.price}
+                            onChange={(e) => updateSignatureDrink(locIndex, drinkIndex, "price", e.target.value)}
+                            placeholder="$12"
+                            className="input-dark w-24"
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => removeSignatureDrink(locIndex, drinkIndex)}
+                            className="text-white/40 hover:text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={drink.ingredients}
+                          onChange={(e) => updateSignatureDrink(locIndex, drinkIndex, "ingredients", e.target.value)}
+                          placeholder="Ingredients (e.g., Bourbon, bitters, orange peel, sugar)"
+                          className="input-dark"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
