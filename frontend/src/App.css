@@ -1,34 +1,35 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* PourPal - Additional App Styles */
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Button press effect */
+.btn-press:active {
+  transform: scale(0.98);
 }
 
-.App-link {
-    color: #61dafb;
+/* Image overlay gradient */
+.image-overlay {
+  background: linear-gradient(to bottom, transparent 0%, rgba(5, 5, 5, 0.8) 70%, rgba(5, 5, 5, 1) 100%);
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Mobile bottom nav safe area */
+.pb-safe {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* QR Code container */
+.qr-container {
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
 }

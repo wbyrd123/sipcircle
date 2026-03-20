@@ -1,0 +1,249 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth, API } from "../App";
+import axios from "axios";
+import { QRCodeSVG } from "qrcode.react";
+import { Button } from "../components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import BottomNav from "../components/BottomNav";
+import { 
+  Wine, MapPin, Clock, Users, MessageCircle, QrCode, DollarSign, 
+  ExternalLink, Copy, Plus, Settings
+} from "lucide-react";
+import { toast } from "sonner";
+
+const BartenderDashboard = () => {
+  const navigate = useNavigate();
+  const { user, token, updateUser } = useAuth();
+  const [showQR, setShowQR] = useState(false);
+  const [stats, setStats] = useState({ followers: 0, messages: 0 });
+
+  const profileUrl = `${window.location.origin}/b/${user?.username}`;
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const [followersRes, messagesRes] = await Promise.all([
+        axios.get(`${API}/followers`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/messages/conversations`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      const unreadCount = messagesRes.data.reduce((acc, conv) => acc + conv.unread_count, 0);
+      setStats({ followers: followersRes.data.length, messages: unreadCount });
+    } catch (e) {
+      console.error("Error fetching stats:", e);
+    }
+  };
+
+  const copyProfileLink = () => {
+    navigator.clipboard.writeText(profileUrl);
+    toast.success("Profile link copied!");
+  };
+
+  const getImageUrl = (path) => {
+    if (!path) return null;
+    return `${API}/files/${path}?auth=${token}`;
+  };
+
+  const getInitials = (name) => {
+    return name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?";
+  };
+
+  if (!user) return null;
+
+  return (
+    <div className="min-h-screen bg-background pb-safe" data-testid="bartender-dashboard">
+      {/* Header */}
+      <header className="p-6 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Wine className="w-6 h-6 text-primary" />
+          <span className="text-xl font-bold text-white">PourPal</span>
+        </div>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => navigate("/edit-profile")}
+          className="text-white/60 hover:text-white"
+          data-testid="settings-btn"
+        >
+          <Settings className="w-5 h-5" />
+        </Button>
+      </header>
+
+      <main className="px-6 space-y-6">
+        {/* Profile Card */}
+        <div className="glass-card p-6">
+          <div className="flex items-start gap-4">
+            <Avatar className="w-20 h-20 border-2 border-primary">
+              <AvatarImage src={getImageUrl(user.profile_image)} />
+              <AvatarFallback className="bg-primary/20 text-primary text-xl">
+                {getInitials(user.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>
+                {user.name}
+              </h1>
+              <p className="text-white/60">@{user.username}</p>
+              {user.bio && <p className="text-white/80 mt-2 text-sm">{user.bio}</p>}
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="flex gap-3 mt-6">
+            <Button 
+              onClick={() => setShowQR(!showQR)}
+              variant="outline"
+              className="flex-1 border-white/20 text-white hover:bg-white/5"
+              data-testid="qr-toggle-btn"
+            >
+              <QrCode className="w-4 h-4 mr-2" />
+              QR Code
+            </Button>
+            <Button 
+              onClick={copyProfileLink}
+              variant="outline"
+              className="flex-1 border-white/20 text-white hover:bg-white/5"
+              data-testid="copy-link-btn"
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copy Link
+            </Button>
+          </div>
+
+          {/* QR Code */}
+          {showQR && (
+            <div className="mt-6 flex justify-center animate-fade-in">
+              <div className="qr-container">
+                <QRCodeSVG 
+                  value={profileUrl} 
+                  size={180}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => navigate("/followers")}
+            className="glass-card-hover p-6 text-left"
+            data-testid="followers-card"
+          >
+            <Users className="w-8 h-8 text-primary mb-3" />
+            <p className="text-3xl font-bold text-white">{stats.followers}</p>
+            <p className="text-white/60 text-sm">Followers</p>
+          </button>
+          <button 
+            onClick={() => navigate("/messages")}
+            className="glass-card-hover p-6 text-left relative"
+            data-testid="messages-card"
+          >
+            <MessageCircle className="w-8 h-8 text-primary mb-3" />
+            <p className="text-3xl font-bold text-white">{stats.messages}</p>
+            <p className="text-white/60 text-sm">Unread Messages</p>
+            {stats.messages > 0 && (
+              <span className="absolute top-4 right-4 w-3 h-3 bg-secondary rounded-full animate-pulse" />
+            )}
+          </button>
+        </div>
+
+        {/* Payment Links */}
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-primary" />
+            Tip Links
+          </h2>
+          <div className="space-y-3">
+            {user.venmo_username ? (
+              <a 
+                href={`https://venmo.com/${user.venmo_username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <span className="text-white">Venmo: @{user.venmo_username}</span>
+                <ExternalLink className="w-4 h-4 text-white/60" />
+              </a>
+            ) : (
+              <p className="text-white/40 text-sm">No Venmo linked</p>
+            )}
+            {user.cashapp_username ? (
+              <a 
+                href={`https://cash.app/$${user.cashapp_username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <span className="text-white">Cash App: ${user.cashapp_username}</span>
+                <ExternalLink className="w-4 h-4 text-white/60" />
+              </a>
+            ) : (
+              <p className="text-white/40 text-sm">No Cash App linked</p>
+            )}
+            {!user.venmo_username && !user.cashapp_username && (
+              <Button 
+                onClick={() => navigate("/edit-profile")}
+                variant="outline"
+                className="w-full border-primary/50 text-primary hover:bg-primary/10"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Payment Links
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Work Locations */}
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-primary" />
+            Work Locations
+          </h2>
+          {user.work_locations && user.work_locations.length > 0 ? (
+            <div className="space-y-4">
+              {user.work_locations.map((loc, i) => (
+                <div key={i} className="p-4 rounded-lg bg-white/5 border border-white/10">
+                  <h3 className="text-white font-medium">{loc.name}</h3>
+                  <p className="text-white/60 text-sm mt-1">{loc.address}</p>
+                  {loc.schedule && loc.schedule.length > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-white/60 text-sm">
+                      <Clock className="w-4 h-4" />
+                      <span>{loc.schedule.length} shifts scheduled</span>
+                    </div>
+                  )}
+                  {loc.happy_hours && loc.happy_hours.length > 0 && (
+                    <span className="inline-block mt-2 px-2 py-1 bg-secondary/20 text-secondary text-xs rounded font-accent">
+                      Happy Hour
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-white/40 mb-4">No work locations added</p>
+              <Button 
+                onClick={() => navigate("/edit-profile")}
+                variant="outline"
+                className="border-primary/50 text-primary hover:bg-primary/10"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Location
+              </Button>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <BottomNav />
+    </div>
+  );
+};
+
+export default BartenderDashboard;

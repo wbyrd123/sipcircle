@@ -1,0 +1,481 @@
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth, API } from "../App";
+import axios from "axios";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { 
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater
+} from "lucide-react";
+import { toast } from "sonner";
+
+const EditProfile = () => {
+  const navigate = useNavigate();
+  const { user, token, updateUser, logout } = useAuth();
+  const fileInputRef = useRef(null);
+  
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  
+  // Form state
+  const [name, setName] = useState(user?.name || "");
+  const [bio, setBio] = useState(user?.bio || "");
+  const [venmo, setVenmo] = useState(user?.venmo_username || "");
+  const [cashapp, setCashapp] = useState(user?.cashapp_username || "");
+  const [locations, setLocations] = useState(user?.work_locations || []);
+
+  const isBartender = user?.role === "bartender";
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await axios.post(`${API}/profile/image`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
+      });
+      updateUser({ profile_image: response.data.path });
+      toast.success("Profile picture updated!");
+    } catch (e) {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const endpoint = isBartender ? "/profile/bartender" : "/profile/customer";
+      const data = isBartender 
+        ? { name, bio, venmo_username: venmo, cashapp_username: cashapp, work_locations: locations }
+        : { name, bio };
+      
+      const response = await axios.put(`${API}${endpoint}`, data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      updateUser(response.data);
+      toast.success("Profile updated!");
+      navigate(-1);
+    } catch (e) {
+      toast.error("Failed to update profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
+
+  const addLocation = () => {
+    setLocations([...locations, {
+      id: crypto.randomUUID(),
+      name: "",
+      address: "",
+      schedule: [],
+      happy_hours: [],
+      drinks: []
+    }]);
+  };
+
+  const updateLocation = (index, field, value) => {
+    const updated = [...locations];
+    updated[index][field] = value;
+    setLocations(updated);
+  };
+
+  const removeLocation = (index) => {
+    setLocations(locations.filter((_, i) => i !== index));
+  };
+
+  const addSchedule = (locIndex) => {
+    const updated = [...locations];
+    updated[locIndex].schedule.push({ day: "Monday", start: "18:00", end: "02:00" });
+    setLocations(updated);
+  };
+
+  const updateSchedule = (locIndex, schedIndex, field, value) => {
+    const updated = [...locations];
+    updated[locIndex].schedule[schedIndex][field] = value;
+    setLocations(updated);
+  };
+
+  const removeSchedule = (locIndex, schedIndex) => {
+    const updated = [...locations];
+    updated[locIndex].schedule = updated[locIndex].schedule.filter((_, i) => i !== schedIndex);
+    setLocations(updated);
+  };
+
+  const addHappyHour = (locIndex) => {
+    const updated = [...locations];
+    updated[locIndex].happy_hours.push({ day: "Monday", start: "17:00", end: "19:00", description: "" });
+    setLocations(updated);
+  };
+
+  const updateHappyHour = (locIndex, hhIndex, field, value) => {
+    const updated = [...locations];
+    updated[locIndex].happy_hours[hhIndex][field] = value;
+    setLocations(updated);
+  };
+
+  const removeHappyHour = (locIndex, hhIndex) => {
+    const updated = [...locations];
+    updated[locIndex].happy_hours = updated[locIndex].happy_hours.filter((_, i) => i !== hhIndex);
+    setLocations(updated);
+  };
+
+  const addDrink = (locIndex, drink) => {
+    if (!drink.trim()) return;
+    const updated = [...locations];
+    if (!updated[locIndex].drinks.includes(drink)) {
+      updated[locIndex].drinks.push(drink);
+      setLocations(updated);
+    }
+  };
+
+  const removeDrink = (locIndex, drinkIndex) => {
+    const updated = [...locations];
+    updated[locIndex].drinks = updated[locIndex].drinks.filter((_, i) => i !== drinkIndex);
+    setLocations(updated);
+  };
+
+  const getImageUrl = (path) => {
+    if (!path) return null;
+    return `${API}/files/${path}?auth=${token}`;
+  };
+
+  const getInitials = (name) => {
+    return name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?";
+  };
+
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  if (!user) return null;
+
+  return (
+    <div className="min-h-screen bg-background" data-testid="edit-profile">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-white/5 p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)}
+            className="text-white/60 hover:text-white"
+            data-testid="back-btn"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-lg font-semibold text-white">Edit Profile</h1>
+        </div>
+        <Button 
+          onClick={handleSave}
+          disabled={loading}
+          className="btn-primary"
+          data-testid="save-btn"
+        >
+          <Save className="w-4 h-4 mr-2" />
+          {loading ? "Saving..." : "Save"}
+        </Button>
+      </header>
+
+      <main className="p-6 space-y-8 pb-20">
+        {/* Profile Picture */}
+        <div className="flex flex-col items-center">
+          <div className="relative">
+            <Avatar className="w-28 h-28 border-2 border-primary">
+              <AvatarImage src={getImageUrl(user.profile_image)} />
+              <AvatarFallback className="bg-primary/20 text-primary text-2xl">
+                {getInitials(user.name)}
+              </AvatarFallback>
+            </Avatar>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-black hover:bg-primary/90 transition-colors"
+              data-testid="upload-photo-btn"
+            >
+              <Camera className="w-5 h-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+          </div>
+          {uploading && <p className="text-white/60 text-sm mt-2">Uploading...</p>}
+        </div>
+
+        {/* Basic Info */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-white">Basic Info</h2>
+          <div className="space-y-2">
+            <Label className="text-white/80">Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-dark"
+              data-testid="name-input"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-white/80">Bio</Label>
+            <Textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Tell people about yourself..."
+              className="input-dark min-h-[100px]"
+              data-testid="bio-input"
+            />
+          </div>
+        </div>
+
+        {/* Bartender-specific fields */}
+        {isBartender && (
+          <>
+            {/* Payment Links */}
+            <div className="glass-card p-6 space-y-4">
+              <h2 className="text-lg font-semibold text-white">Payment Links</h2>
+              <div className="space-y-2">
+                <Label className="text-white/80">Venmo Username</Label>
+                <Input
+                  value={venmo}
+                  onChange={(e) => setVenmo(e.target.value)}
+                  placeholder="yourvenmo"
+                  className="input-dark"
+                  data-testid="venmo-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white/80">Cash App Username</Label>
+                <Input
+                  value={cashapp}
+                  onChange={(e) => setCashapp(e.target.value)}
+                  placeholder="yourcashapp"
+                  className="input-dark"
+                  data-testid="cashapp-input"
+                />
+              </div>
+            </div>
+
+            {/* Work Locations */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  Work Locations
+                </h2>
+                <Button onClick={addLocation} variant="outline" className="border-primary/50 text-primary hover:bg-primary/10">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Location
+                </Button>
+              </div>
+
+              {locations.map((loc, locIndex) => (
+                <div key={loc.id || locIndex} className="glass-card p-6 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <h3 className="text-white font-medium">Location {locIndex + 1}</h3>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeLocation(locIndex)}
+                      className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white/80">Bar/Venue Name</Label>
+                    <Input
+                      value={loc.name}
+                      onChange={(e) => updateLocation(locIndex, "name", e.target.value)}
+                      placeholder="The Golden Tap"
+                      className="input-dark"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white/80">Address</Label>
+                    <Input
+                      value={loc.address}
+                      onChange={(e) => updateLocation(locIndex, "address", e.target.value)}
+                      placeholder="123 Main St, City, State"
+                      className="input-dark"
+                    />
+                  </div>
+
+                  {/* Schedule */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-white/80 flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Schedule
+                      </Label>
+                      <Button onClick={() => addSchedule(locIndex)} size="sm" variant="ghost" className="text-primary text-xs">
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add Shift
+                      </Button>
+                    </div>
+                    {loc.schedule?.map((s, sIndex) => (
+                      <div key={sIndex} className="flex gap-2 items-center">
+                        <select
+                          value={s.day}
+                          onChange={(e) => updateSchedule(locIndex, sIndex, "day", e.target.value)}
+                          className="flex-1 input-dark h-10 px-3 rounded-lg"
+                        >
+                          {days.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                        <Input
+                          type="time"
+                          value={s.start}
+                          onChange={(e) => updateSchedule(locIndex, sIndex, "start", e.target.value)}
+                          className="input-dark w-24"
+                        />
+                        <span className="text-white/40">to</span>
+                        <Input
+                          type="time"
+                          value={s.end}
+                          onChange={(e) => updateSchedule(locIndex, sIndex, "end", e.target.value)}
+                          className="input-dark w-24"
+                        />
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeSchedule(locIndex, sIndex)}
+                          className="text-white/40 hover:text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Happy Hours */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-secondary flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Happy Hours
+                      </Label>
+                      <Button onClick={() => addHappyHour(locIndex)} size="sm" variant="ghost" className="text-secondary text-xs">
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add Happy Hour
+                      </Button>
+                    </div>
+                    {loc.happy_hours?.map((hh, hhIndex) => (
+                      <div key={hhIndex} className="p-3 rounded-lg bg-secondary/10 border border-secondary/20 space-y-2">
+                        <div className="flex gap-2 items-center">
+                          <select
+                            value={hh.day}
+                            onChange={(e) => updateHappyHour(locIndex, hhIndex, "day", e.target.value)}
+                            className="flex-1 input-dark h-10 px-3 rounded-lg"
+                          >
+                            {days.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                          <Input
+                            type="time"
+                            value={hh.start}
+                            onChange={(e) => updateHappyHour(locIndex, hhIndex, "start", e.target.value)}
+                            className="input-dark w-24"
+                          />
+                          <span className="text-white/40">to</span>
+                          <Input
+                            type="time"
+                            value={hh.end}
+                            onChange={(e) => updateHappyHour(locIndex, hhIndex, "end", e.target.value)}
+                            className="input-dark w-24"
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => removeHappyHour(locIndex, hhIndex)}
+                            className="text-white/40 hover:text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={hh.description}
+                          onChange={(e) => updateHappyHour(locIndex, hhIndex, "description", e.target.value)}
+                          placeholder="Half off wells, $5 margaritas..."
+                          className="input-dark"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Drinks */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-primary flex items-center gap-2">
+                        <GlassWater className="w-4 h-4" />
+                        Signature Drinks
+                      </Label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {loc.drinks?.map((drink, dIndex) => (
+                        <span 
+                          key={dIndex}
+                          className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm flex items-center gap-2"
+                        >
+                          {drink}
+                          <button onClick={() => removeDrink(locIndex, dIndex)} className="hover:text-red-400">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <Input
+                      placeholder="Add a drink and press Enter"
+                      className="input-dark"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addDrink(locIndex, e.target.value);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Logout */}
+        <Button 
+          onClick={handleLogout}
+          variant="outline"
+          className="w-full border-red-400/50 text-red-400 hover:bg-red-400/10"
+          data-testid="logout-btn"
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Log Out
+        </Button>
+      </main>
+    </div>
+  );
+};
+
+export default EditProfile;
