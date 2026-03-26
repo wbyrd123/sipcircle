@@ -54,7 +54,7 @@ const BartenderDashboard = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-background pb-safe" data-testid="bartender-dashboard">
+    <div className="min-h-screen bg-background overflow-y-auto" data-testid="bartender-dashboard">
       {/* Header */}
       <header className="p-6 flex justify-between items-center">
         <div className="flex items-center gap-2">
@@ -72,7 +72,7 @@ const BartenderDashboard = () => {
         </Button>
       </header>
 
-      <main className="px-6 space-y-6">
+      <main className="px-6 space-y-6 pb-24">
         {/* Profile Card */}
         <div className="glass-card p-6">
           <div className="flex items-start gap-4">

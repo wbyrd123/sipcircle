@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/cli": "5",
+    "@capacitor/core": "5",
+    "@capacitor/ios": "5",
+    "@capacitor/splash-screen": "5",
+    "@capacitor/status-bar": "5",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.8",
     "@radix-ui/react-alert-dialog": "^1.1.11",
@@ -59,7 +64,12 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "cap:init": "cap init PourPal com.pourpal.app --web-dir=build",
+    "cap:add:ios": "cap add ios",
+    "cap:sync": "cap sync",
+    "cap:build": "yarn build && cap sync",
+    "cap:open:ios": "cap open ios"
   },
   "browserslist": {
     "production": [
