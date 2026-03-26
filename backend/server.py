@@ -135,7 +135,8 @@ class MessageCreate(BaseModel):
 class InviteCreate(BaseModel):
     recipient_ids: List[str]
     location_name: str
-    address: str
+    address: Optional[str] = None
+    maps_url: Optional[str] = None
     datetime_str: str
     message: Optional[str] = None
 
@@ -488,6 +489,7 @@ async def create_invite(invite: InviteCreate, user: dict = Depends(get_current_u
         "recipient_ids": invite.recipient_ids,
         "location_name": invite.location_name,
         "address": invite.address,
+        "maps_url": invite.maps_url,
         "datetime_str": invite.datetime_str,
         "message": invite.message,
         "responses": {},  # {user_id: "accepted"|"declined"|"maybe"}

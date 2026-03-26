@@ -8,8 +8,9 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
+import PlaceAutocomplete from "../components/PlaceAutocomplete";
 import { 
-  ArrowLeft, Plus, Calendar, MapPin, Clock, Check, X, HelpCircle, Users
+  ArrowLeft, Plus, Calendar, MapPin, Clock, Check, X, HelpCircle, Users, ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
@@ -26,6 +27,7 @@ const InvitesPage = () => {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [locationName, setLocationName] = useState("");
   const [address, setAddress] = useState("");
+  const [mapsUrl, setMapsUrl] = useState("");
   const [dateTime, setDateTime] = useState("");
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
@@ -49,9 +51,15 @@ const InvitesPage = () => {
     }
   };
 
+  const handlePlaceSelect = (place) => {
+    setLocationName(place.name);
+    setAddress(place.address);
+    setMapsUrl(place.mapsUrl);
+  };
+
   const createInvite = async () => {
-    if (!locationName || !address || !dateTime || selectedUsers.length === 0) {
-      toast.error("Please fill all fields and select at least one person");
+    if (!locationName || !dateTime || selectedUsers.length === 0) {
+      toast.error("Please select a location, date/time, and at least one person");
       return;
     }
 
@@ -61,6 +69,7 @@ const InvitesPage = () => {
         recipient_ids: selectedUsers,
         location_name: locationName,
         address,
+        maps_url: mapsUrl,
         datetime_str: dateTime,
         message
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -92,6 +101,7 @@ const InvitesPage = () => {
     setSelectedUsers([]);
     setLocationName("");
     setAddress("");
+    setMapsUrl("");
     setDateTime("");
     setMessage("");
   };
@@ -148,23 +158,33 @@ const InvitesPage = () => {
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label className="text-white/80">Location Name</Label>
-                <Input
-                  value={locationName}
-                  onChange={(e) => setLocationName(e.target.value)}
-                  placeholder="The Golden Tap"
-                  className="input-dark"
+                <Label className="text-white/80">Search Location</Label>
+                <PlaceAutocomplete 
+                  onPlaceSelect={handlePlaceSelect}
+                  placeholder="Search for a bar, restaurant..."
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-white/80">Address</Label>
-                <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="123 Main St"
-                  className="input-dark"
-                />
-              </div>
+              
+              {/* Show selected location */}
+              {locationName && (
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
+                  <p className="text-white font-medium">{locationName}</p>
+                  {address && <p className="text-white/60 text-sm mt-1">{address}</p>}
+                  {mapsUrl && (
+                    <a 
+                      href={mapsUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary text-sm mt-2 hover:underline"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      View on Google Maps
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label className="text-white/80">Date & Time</Label>
                 <Input
@@ -257,10 +277,25 @@ const InvitesPage = () => {
                   
                   <h3 className="text-white font-semibold text-lg">{invite.location_name}</h3>
                   
-                  <div className="flex items-center gap-2 text-white/60 text-sm mt-2">
-                    <MapPin className="w-4 h-4" />
-                    <span>{invite.address}</span>
-                  </div>
+                  {invite.address && (
+                    <div className="flex items-center gap-2 text-white/60 text-sm mt-2">
+                      <MapPin className="w-4 h-4" />
+                      <span>{invite.address}</span>
+                    </div>
+                  )}
+                  
+                  {invite.maps_url && (
+                    <a 
+                      href={invite.maps_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-primary text-sm mt-2 hover:underline"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      Open in Google Maps
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                   
                   <div className="flex items-center gap-2 text-white/60 text-sm mt-1">
                     <Clock className="w-4 h-4" />
