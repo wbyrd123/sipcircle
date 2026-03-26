@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../App";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Checkbox } from "../components/ui/checkbox";
 import { Wine, ArrowLeft, GlassWater, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,6 +18,7 @@ const AuthPage = () => {
   const [activeTab, setActiveTab] = useState("login");
   const [role, setRole] = useState(searchParams.get("role") || "customer");
   const [loading, setLoading] = useState(false);
+  const [ageVerified, setAgeVerified] = useState(false);
   
   const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", name: "", username: "" });
@@ -39,6 +41,10 @@ const AuthPage = () => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!ageVerified) {
+      toast.error("You must confirm you are of legal drinking age to register");
+      return;
+    }
     if (registerForm.password.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
@@ -232,10 +238,32 @@ const AuthPage = () => {
                         data-testid="register-password-input"
                       />
                     </div>
+                    
+                    {/* Age Verification */}
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-white/5 border border-white/10">
+                      <Checkbox
+                        id="age-verification"
+                        checked={ageVerified}
+                        onCheckedChange={setAgeVerified}
+                        className="mt-0.5 border-white/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                        data-testid="age-verification-checkbox"
+                      />
+                      <label 
+                        htmlFor="age-verification" 
+                        className="text-sm text-white/70 leading-relaxed cursor-pointer"
+                      >
+                        I confirm that I am of <span className="text-white font-medium">legal drinking age</span> in 
+                        my jurisdiction and agree to the{" "}
+                        <Link to="/privacy" className="text-primary hover:underline">
+                          Privacy Policy
+                        </Link>
+                      </label>
+                    </div>
+
                     <Button 
                       type="submit" 
                       className="w-full btn-primary btn-press"
-                      disabled={loading}
+                      disabled={loading || !ageVerified}
                       data-testid="register-submit-btn"
                     >
                       {loading ? "Creating account..." : `Create ${role === "bartender" ? "Bartender" : "Bar-Goer"} Account`}

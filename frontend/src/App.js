@@ -16,6 +16,7 @@ import ConversationPage from "./pages/ConversationPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import InvitesPage from "./pages/InvitesPage";
 import FollowersPage from "./pages/FollowersPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -139,6 +140,9 @@ const AppRoutes = () => {
       
       {/* Public Bartender Profile */}
       <Route path="/b/:username" element={<BartenderProfile />} />
+      
+      {/* Public Pages */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" />} />

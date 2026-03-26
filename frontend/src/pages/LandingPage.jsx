@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Wine, Users, MessageCircle, MapPin, QrCode, DollarSign } from "lucide-react";
 
@@ -131,7 +131,12 @@ const LandingPage = () => {
             <Wine className="w-6 h-6 text-primary" />
             <span className="text-white font-semibold">PourPal</span>
           </div>
-          <p className="text-white/40 text-sm">2025 PourPal. Drink responsibly.</p>
+          <div className="flex items-center gap-6">
+            <Link to="/privacy" className="text-white/40 text-sm hover:text-white/60 transition-colors">
+              Privacy Policy
+            </Link>
+            <p className="text-white/40 text-sm">© 2025 PourPal. Drink responsibly.</p>
+          </div>
         </div>
       </footer>
     </div>
