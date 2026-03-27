@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Input } from "./ui/input";
 import { MapPin, Loader2 } from "lucide-react";
 
 const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location..." }) => {
@@ -41,6 +40,15 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
       const place = autocompleteRef.current.getPlace();
       
       if (place && place.geometry) {
+        const displayName = place.name || place.formatted_address || "";
+        
+        // Set the input value explicitly after a micro delay
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.value = displayName;
+          }
+        }, 10);
+        
         const locationData = {
           name: place.name || "",
           address: place.formatted_address || "",
@@ -50,26 +58,33 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
           lng: place.geometry.location.lng(),
         };
         
-        // Let Google's autocomplete handle the input value naturally
-        // Just call the callback with the location data
         onPlaceSelect(locationData);
       }
     });
   };
 
+  // Prevent form submission on enter
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  };
+
   return (
     <div className="relative">
-      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 z-10" />
+      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 z-10 pointer-events-none" />
       <input
         ref={inputRef}
         type="text"
         placeholder={isLoaded ? placeholder : "Loading..."}
         disabled={!isLoaded}
-        className="flex h-12 w-full rounded-lg border border-white/10 bg-white/5 px-3 pl-10 pr-10 text-sm text-white placeholder:text-white/30 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        onKeyDown={handleKeyDown}
+        className="flex h-12 w-full rounded-lg border border-white/10 bg-white/5 px-3 pl-10 pr-4 text-sm text-white placeholder:text-white/30 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ fontSize: '16px' }} 
         data-testid="place-autocomplete-input"
       />
       {!isLoaded && (
-        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 animate-spin" />
+        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 animate-spin pointer-events-none" />
       )}
     </div>
   );
