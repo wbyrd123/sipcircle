@@ -65,7 +65,7 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "cap:init": "cap init PourPal com.pourpal.app --web-dir=build",
+    "cap:init": "cap init SipCircle com.sipcircle.app --web-dir=build",
     "cap:add:ios": "cap add ios",
     "cap:sync": "cap sync",
     "cap:build": "yarn build && cap sync",

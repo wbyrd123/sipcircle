@@ -1,8 +1,8 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.pourpal.app',
-  appName: 'PourPal',
+  appId: 'com.sipcircle.app',
+  appName: 'SipCircle',
   webDir: 'build',
   server: {
     // For development, you can use your preview URL
@@ -29,7 +29,7 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'automatic',
     preferredContentMode: 'mobile',
-    scheme: 'PourPal',
+    scheme: 'SipCircle',
   },
 };
 

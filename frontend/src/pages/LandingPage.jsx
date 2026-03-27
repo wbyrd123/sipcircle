@@ -31,7 +31,7 @@ const LandingPage = () => {
         <header className="relative z-10 p-6 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Wine className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>PourPal</span>
+            <span className="text-2xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>SipCircle</span>
           </div>
           <Button 
             onClick={() => navigate("/auth")} 
@@ -129,13 +129,13 @@ const LandingPage = () => {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <Wine className="w-6 h-6 text-primary" />
-            <span className="text-white font-semibold">PourPal</span>
+            <span className="text-white font-semibold">SipCircle</span>
           </div>
           <div className="flex items-center gap-6">
             <Link to="/privacy" className="text-white/40 text-sm hover:text-white/60 transition-colors">
               Privacy Policy
             </Link>
-            <p className="text-white/40 text-sm">© 2025 PourPal. Drink responsibly.</p>
+            <p className="text-white/40 text-sm">© 2025 SipCircle. Drink responsibly.</p>
           </div>
         </div>
       </footer>

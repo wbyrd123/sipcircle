@@ -19,7 +19,7 @@ const PrivacyPolicy = () => {
         </Button>
         <div className="flex items-center gap-2">
           <Wine className="w-5 h-5 text-primary" />
-          <span className="text-lg font-semibold text-white">PourPal</span>
+          <span className="text-lg font-semibold text-white">SipCircle</span>
         </div>
       </header>
 
@@ -34,13 +34,13 @@ const PrivacyPolicy = () => {
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white">1. Introduction</h2>
             <p>
-              Welcome to PourPal ("we," "our," or "us"). We are committed to protecting your privacy 
+              Welcome to SipCircle ("we," "our," or "us"). We are committed to protecting your privacy 
               and personal information. This Privacy Policy explains how we collect, use, disclose, 
               and safeguard your information when you use our mobile application and website 
               (collectively, the "Service").
             </p>
             <p>
-              Please read this Privacy Policy carefully. By accessing or using PourPal, you acknowledge 
+              Please read this Privacy Policy carefully. By accessing or using SipCircle, you acknowledge 
               that you have read, understood, and agree to be bound by this Privacy Policy.
             </p>
           </section>
@@ -48,7 +48,7 @@ const PrivacyPolicy = () => {
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white">2. Age Requirement</h2>
             <p>
-              PourPal is intended for users who are of legal drinking age in their jurisdiction. 
+              SipCircle is intended for users who are of legal drinking age in their jurisdiction. 
               By using our Service, you represent and warrant that you are at least 21 years of age 
               in the United States, or the legal drinking age in your country of residence. We do not 
               knowingly collect information from individuals under the legal drinking age.
@@ -167,7 +167,7 @@ const PrivacyPolicy = () => {
               If you have any questions about this Privacy Policy or our privacy practices, 
               please contact us at:
             </p>
-            <p className="text-primary">privacy@pourpal.app</p>
+            <p className="text-primary">privacy@sipcircle.app</p>
           </section>
         </div>
       </main>
@@ -177,9 +177,9 @@ const PrivacyPolicy = () => {
         <div className="max-w-3xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <Wine className="w-5 h-5 text-primary" />
-            <span className="text-white font-semibold">PourPal</span>
+            <span className="text-white font-semibold">SipCircle</span>
           </div>
-          <p className="text-white/40 text-sm">© 2025 PourPal. All rights reserved.</p>
+          <p className="text-white/40 text-sm">© 2025 SipCircle. All rights reserved.</p>
         </div>
       </footer>
     </div>

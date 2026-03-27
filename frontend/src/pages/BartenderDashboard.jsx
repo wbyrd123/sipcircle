@@ -59,7 +59,7 @@ const BartenderDashboard = () => {
       <header className="p-6 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Wine className="w-6 h-6 text-primary" />
-          <span className="text-xl font-bold text-white">PourPal</span>
+          <span className="text-xl font-bold text-white">SipCircle</span>
         </div>
         <Button 
           variant="ghost" 

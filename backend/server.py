@@ -24,18 +24,18 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Config
-JWT_SECRET = os.environ.get('JWT_SECRET', 'pourpal-secret-key-change-in-production')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'sipcircle-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
 # Object Storage Config
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
-APP_NAME = "pourpal"
+APP_NAME = "sipcircle"
 storage_key = None
 
 # Create the main app
-app = FastAPI(title="PourPal API")
+app = FastAPI(title="SipCircle API")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -521,7 +521,7 @@ async def respond_to_invite(invite_id: str, response: str, user: dict = Depends(
 # ===================== HEALTH CHECK =====================
 @api_router.get("/")
 async def root():
-    return {"message": "PourPal API", "status": "running"}
+    return {"message": "SipCircle API", "status": "running"}
 
 @api_router.get("/health")
 async def health():
@@ -583,7 +583,7 @@ async def startup():
     await db.users.create_index("username", unique=True)
     await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
     await db.invites.create_index("creator_id")
-    logger.info("PourPal API started")
+    logger.info("SipCircle API started")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

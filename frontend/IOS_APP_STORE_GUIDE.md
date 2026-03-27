@@ -1,4 +1,4 @@
-# PourPal iOS App Store Submission Guide
+# SipCircle iOS App Store Submission Guide
 
 ## Prerequisites Checklist
 
@@ -31,13 +31,13 @@ sudo gem install cocoapods
 
 ## Step 2: Download the Project
 
-You'll need to download the PourPal project from Emergent. 
+You'll need to download the SipCircle project from Emergent. 
 
 1. In Emergent, click the **Download** button to get the project code
 2. Unzip the downloaded file
 3. Open Terminal and navigate to the frontend folder:
    ```bash
-   cd path/to/pourpal/frontend
+   cd path/to/sipcircle/frontend
    ```
 
 ---
@@ -94,7 +94,7 @@ This opens the iOS project in Xcode.
 1. In Xcode, click on **App** in the project navigator (left sidebar)
 2. Select the **App** target
 3. Go to **Signing & Capabilities** tab
-4. Set **Bundle Identifier**: `com.pourpal.app` (or your preferred ID)
+4. Set **Bundle Identifier**: `com.sipcircle.app` (or your preferred ID)
 5. Select your **Team** (your Apple Developer account)
 6. Check **Automatically manage signing**
 
@@ -104,7 +104,7 @@ This opens the iOS project in Xcode.
 3. Set **Build**: `1`
 
 ### Set Display Name
-1. In **General** tab, set **Display Name**: `PourPal`
+1. In **General** tab, set **Display Name**: `SipCircle`
 
 ### Configure iOS Deployment Target
 1. Set **Minimum Deployments** iOS version to `14.0` or higher
@@ -113,15 +113,15 @@ This opens the iOS project in Xcode.
 
 ## Step 7: Add Required Privacy Descriptions
 
-Since PourPal uses the camera for profile photos, add these to `Info.plist`:
+Since SipCircle uses the camera for profile photos, add these to `Info.plist`:
 
 1. In Xcode, open `App > App > Info.plist`
 2. Add these keys (right-click > Add Row):
 
 | Key | Value |
 |-----|-------|
-| Privacy - Camera Usage Description | PourPal needs camera access to take profile photos |
-| Privacy - Photo Library Usage Description | PourPal needs photo library access to select profile photos |
+| Privacy - Camera Usage Description | SipCircle needs camera access to take profile photos |
+| Privacy - Photo Library Usage Description | SipCircle needs photo library access to select profile photos |
 
 ---
 
@@ -173,10 +173,10 @@ Since PourPal uses the camera for profile photos, add these to `Info.plist`:
 3. Click **My Apps** > **+** > **New App**
 4. Fill in:
    - **Platform**: iOS
-   - **Name**: PourPal
+   - **Name**: SipCircle
    - **Primary Language**: English (U.S.)
-   - **Bundle ID**: com.pourpal.app
-   - **SKU**: pourpal-001 (any unique identifier)
+   - **Bundle ID**: com.sipcircle.app
+   - **SKU**: sipcircle-001 (any unique identifier)
 5. Click **Create**
 
 ### Add TestFlight Testers
@@ -209,7 +209,7 @@ When ready for public release, you'll need:
 - 5.5" Display (iPhone 8 Plus): 1242 x 2208 pixels
 
 ### App Information
-- **Description**: A compelling description of PourPal
+- **Description**: A compelling description of SipCircle
 - **Keywords**: bartender, tips, bar, drinks, social, follow, nightlife
 - **Support URL**: Your support website
 - **Privacy Policy URL**: `https://craft-scene.preview.emergentagent.com/privacy`

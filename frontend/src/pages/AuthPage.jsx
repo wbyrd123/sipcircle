@@ -52,7 +52,7 @@ const AuthPage = () => {
     setLoading(true);
     try {
       const user = await register({ ...registerForm, role });
-      toast.success(`Welcome to PourPal, ${user.name}!`);
+      toast.success(`Welcome to SipCircle, ${user.name}!`);
       navigate(user.role === "bartender" ? "/dashboard" : "/home");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Registration failed");
@@ -87,7 +87,7 @@ const AuthPage = () => {
           </Button>
           <div className="flex items-center gap-2">
             <Wine className="w-6 h-6 text-primary" />
-            <span className="text-xl font-bold text-white">PourPal</span>
+            <span className="text-xl font-bold text-white">SipCircle</span>
           </div>
         </header>
 
@@ -150,7 +150,7 @@ const AuthPage = () => {
                 <TabsContent value="register" className="space-y-6">
                   <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
-                      Join PourPal
+                      Join SipCircle
                     </h1>
                     <p className="text-white/60 text-sm">Create your account</p>
                   </div>

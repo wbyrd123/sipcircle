@@ -28,7 +28,7 @@ export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("pourpal_token"));
+  const [token, setToken] = useState(localStorage.getItem("sipcircle_token"));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,7 +41,7 @@ const AuthProvider = ({ children }) => {
           setUser(response.data);
         } catch (e) {
           console.error("Auth error:", e);
-          localStorage.removeItem("pourpal_token");
+          localStorage.removeItem("sipcircle_token");
           setToken(null);
         }
       }
@@ -52,7 +52,7 @@ const AuthProvider = ({ children }) => {
 
   const login = async (identifier, password) => {
     const response = await axios.post(`${API}/auth/login`, { identifier, password });
-    localStorage.setItem("pourpal_token", response.data.token);
+    localStorage.setItem("sipcircle_token", response.data.token);
     setToken(response.data.token);
     setUser(response.data.user);
     return response.data.user;
@@ -60,14 +60,14 @@ const AuthProvider = ({ children }) => {
 
   const register = async (data) => {
     const response = await axios.post(`${API}/auth/register`, data);
-    localStorage.setItem("pourpal_token", response.data.token);
+    localStorage.setItem("sipcircle_token", response.data.token);
     setToken(response.data.token);
     setUser(response.data.user);
     return response.data.user;
   };
 
   const logout = () => {
-    localStorage.removeItem("pourpal_token");
+    localStorage.removeItem("sipcircle_token");
     setToken(null);
     setUser(null);
   };
