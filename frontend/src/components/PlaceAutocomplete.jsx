@@ -6,7 +6,6 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [inputValue, setInputValue] = useState("");
 
   useEffect(() => {
     // Check if Google Maps is loaded
@@ -51,7 +50,8 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
           lng: place.geometry.location.lng(),
         };
         
-        setInputValue(place.name || place.formatted_address || "");
+        // Let Google's autocomplete handle the input value naturally
+        // Just call the callback with the location data
         onPlaceSelect(locationData);
       }
     });
@@ -59,15 +59,13 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
 
   return (
     <div className="relative">
-      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-      <Input
+      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 z-10" />
+      <input
         ref={inputRef}
         type="text"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
         placeholder={isLoaded ? placeholder : "Loading..."}
-        className="input-dark pl-10 pr-10"
         disabled={!isLoaded}
+        className="flex h-12 w-full rounded-lg border border-white/10 bg-white/5 px-3 pl-10 pr-10 text-sm text-white placeholder:text-white/30 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="place-autocomplete-input"
       />
       {!isLoaded && (
