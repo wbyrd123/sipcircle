@@ -20,8 +20,25 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
 
     checkGoogleMaps();
 
+    // Fix for mobile: ensure pac-container receives touch events
+    const fixTouchEvents = () => {
+      const pacContainers = document.querySelectorAll('.pac-container');
+      pacContainers.forEach(container => {
+        container.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+        }, { passive: true });
+        container.addEventListener('touchend', (e) => {
+          e.stopPropagation();
+        }, { passive: true });
+      });
+    };
+
+    // Run the fix after a delay to ensure pac-container exists
+    const fixInterval = setInterval(fixTouchEvents, 500);
+    setTimeout(() => clearInterval(fixInterval), 5000);
+
     return () => {
-      // Cleanup
+      clearInterval(fixInterval);
       if (autocompleteRef.current) {
         window.google?.maps?.event?.clearInstanceListeners(autocompleteRef.current);
       }
@@ -31,10 +48,15 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
   const initAutocomplete = () => {
     if (!inputRef.current || !window.google) return;
 
-    autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+    const options = {
       types: ["establishment", "geocode"],
       fields: ["name", "formatted_address", "geometry", "place_id", "url"],
-    });
+    };
+
+    autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, options);
+
+    // Prevent the default behavior that might interfere with touch
+    autocompleteRef.current.setOptions({ strictBounds: false });
 
     autocompleteRef.current.addListener("place_changed", () => {
       const place = autocompleteRef.current.getPlace();
@@ -42,12 +64,10 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
       if (place && place.geometry) {
         const displayName = place.name || place.formatted_address || "";
         
-        // Set the input value explicitly after a micro delay
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.value = displayName;
-          }
-        }, 10);
+        // Set the input value explicitly
+        if (inputRef.current) {
+          inputRef.current.value = displayName;
+        }
         
         const locationData = {
           name: place.name || "",
@@ -79,6 +99,7 @@ const PlaceAutocomplete = ({ onPlaceSelect, placeholder = "Search for a location
         placeholder={isLoaded ? placeholder : "Loading..."}
         disabled={!isLoaded}
         onKeyDown={handleKeyDown}
+        autoComplete="off"
         className="flex h-12 w-full rounded-lg border border-white/10 bg-white/5 px-3 pl-10 pr-4 text-sm text-white placeholder:text-white/30 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         style={{ fontSize: '16px' }} 
         data-testid="place-autocomplete-input"

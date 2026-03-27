@@ -42,6 +42,59 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Google Places Autocomplete dropdown - must be above dialogs */
+.pac-container {
+  z-index: 10000 !important;
+  background-color: #1a1a1a !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+  font-family: 'Manrope', sans-serif !important;
+  margin-top: 4px !important;
+  padding: 4px 0 !important;
+  pointer-events: auto !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.pac-item {
+  padding: 12px 16px !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  border-top: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(198, 142, 23, 0.2);
+}
+
+.pac-item:last-child {
+  border-bottom: none !important;
+}
+
+.pac-item:hover,
+.pac-item:active,
+.pac-item.pac-item-selected {
+  background-color: rgba(198, 142, 23, 0.15) !important;
+}
+
+.pac-item-query {
+  color: #C68E17 !important;
+  font-weight: 500 !important;
+}
+
+.pac-matched {
+  color: #C68E17 !important;
+  font-weight: 600 !important;
+}
+
+.pac-icon {
+  display: none !important;
+}
+
+.pac-logo::after {
+  display: none !important;
+}
+
 /* QR Code container */
 .qr-container {
   background: white;
