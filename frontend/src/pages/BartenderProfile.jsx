@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
   Wine, MapPin, Clock, Users, MessageCircle, QrCode, DollarSign, 
-  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater
+  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,13 +51,25 @@ const BartenderProfile = () => {
     setFollowLoading(true);
     try {
       if (bartender.is_following) {
+        // Unfollow
         await axios.delete(`${API}/follow/${bartender.id}`, { headers: { Authorization: `Bearer ${token}` } });
-        setBartender({ ...bartender, is_following: false, follower_count: bartender.follower_count - 1 });
+        setBartender({ ...bartender, is_following: false, is_pending: false, follower_count: bartender.follower_count - 1 });
         toast.success("Unfollowed");
+      } else if (bartender.is_pending) {
+        // Cancel pending request (unfollow endpoint handles this)
+        await axios.delete(`${API}/follow/${bartender.id}`, { headers: { Authorization: `Bearer ${token}` } });
+        setBartender({ ...bartender, is_pending: false });
+        toast.success("Request cancelled");
       } else {
-        await axios.post(`${API}/follow/${bartender.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
-        setBartender({ ...bartender, is_following: true, follower_count: bartender.follower_count + 1 });
-        toast.success("Now following!");
+        // Follow or request to follow
+        const response = await axios.post(`${API}/follow/${bartender.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        if (response.data.status === "pending") {
+          setBartender({ ...bartender, is_pending: true });
+          toast.success("Follow request sent!");
+        } else {
+          setBartender({ ...bartender, is_following: true, follower_count: bartender.follower_count + 1 });
+          toast.success("Now following!");
+        }
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Error");
@@ -166,16 +178,26 @@ const BartenderProfile = () => {
             </div>
           </div>
           <div className="flex gap-2">
-            {user?.role === "customer" && (
+            {user && user.id !== bartender.id && (
               <>
                 <Button 
                   onClick={handleFollow}
                   disabled={followLoading}
-                  className={bartender.is_following ? "btn-secondary" : "btn-primary"}
+                  className={
+                    bartender.is_following 
+                      ? "btn-secondary" 
+                      : bartender.is_pending 
+                        ? "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+                        : "btn-primary"
+                  }
                   data-testid="follow-btn"
                 >
-                  {bartender.is_following ? (
+                  {followLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : bartender.is_following ? (
                     <><UserMinus className="w-4 h-4 mr-2" /> Following</>
+                  ) : bartender.is_pending ? (
+                    <>Requested</>
                   ) : (
                     <><UserPlus className="w-4 h-4 mr-2" /> Follow</>
                   )}

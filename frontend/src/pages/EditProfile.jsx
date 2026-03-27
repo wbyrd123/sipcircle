@@ -7,8 +7,9 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { Switch } from "../components/ui/switch";
 import { 
-  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -33,6 +34,7 @@ const EditProfile = () => {
   const [cashappLink, setCashappLink] = useState(user?.cashapp_link || "");
   const [paypalLink, setPaypalLink] = useState(user?.paypal_link || "");
   const [locations, setLocations] = useState(user?.work_locations || []);
+  const [requireFollowApproval, setRequireFollowApproval] = useState(user?.require_follow_approval || false);
 
   const isBartender = user?.role === "bartender";
 
@@ -70,8 +72,8 @@ const EditProfile = () => {
     try {
       const endpoint = isBartender ? "/profile/bartender" : "/profile/customer";
       const data = isBartender 
-        ? { name, bio, venmo_link: venmoLink, cashapp_link: cashappLink, paypal_link: paypalLink, work_locations: locations }
-        : { name, bio };
+        ? { name, bio, venmo_link: venmoLink, cashapp_link: cashappLink, paypal_link: paypalLink, work_locations: locations, require_follow_approval: requireFollowApproval }
+        : { name, bio, require_follow_approval: requireFollowApproval };
       
       const response = await axios.put(`${API}${endpoint}`, data, {
         headers: { Authorization: `Bearer ${token}` }
@@ -308,6 +310,27 @@ const EditProfile = () => {
               placeholder="Tell people about yourself..."
               className="input-dark min-h-[100px]"
               data-testid="bio-input"
+            />
+          </div>
+        </div>
+
+        {/* Privacy Settings */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            Privacy Settings
+          </h2>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-white/5">
+            <div className="flex-1">
+              <p className="text-white font-medium">Require Follow Approval</p>
+              <p className="text-white/50 text-sm mt-1">
+                When enabled, you'll need to approve follow requests before others can follow you
+              </p>
+            </div>
+            <Switch
+              checked={requireFollowApproval}
+              onCheckedChange={setRequireFollowApproval}
+              data-testid="require-approval-toggle"
             />
           </div>
         </div>

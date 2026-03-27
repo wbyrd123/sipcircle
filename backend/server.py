@@ -123,10 +123,12 @@ class BartenderProfileUpdate(BaseModel):
     cashapp_link: Optional[str] = None
     paypal_link: Optional[str] = None
     work_locations: Optional[List[WorkLocation]] = None
+    require_follow_approval: Optional[bool] = None
 
 class CustomerProfileUpdate(BaseModel):
     name: Optional[str] = None
     bio: Optional[str] = None
+    require_follow_approval: Optional[bool] = None
 
 class MessageCreate(BaseModel):
     recipient_id: str
@@ -208,7 +210,10 @@ async def register(req: RegisterRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "followers": [],
         "following": [],
-        "blocked_users": []
+        "blocked_users": [],
+        "follow_requests": [],
+        "pending_follows": [],
+        "require_follow_approval": False
     }
     
     if req.role == UserRole.BARTENDER:
@@ -317,6 +322,20 @@ async def list_bartenders(search: str = None, user: dict = Depends(get_optional_
     bartenders = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(100)
     return bartenders
 
+@api_router.get("/users")
+async def list_users(search: str = None, role: str = None, user: dict = Depends(get_optional_user)):
+    query = {}
+    if role:
+        query["role"] = role
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"username": {"$regex": search, "$options": "i"}}
+        ]
+    
+    users = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(100)
+    return users
+
 @api_router.get("/bartender/{username}")
 async def get_bartender_profile(username: str, user: dict = Depends(get_optional_user)):
     bartender = await db.users.find_one({"username": username, "role": UserRole.BARTENDER}, {"_id": 0, "password_hash": 0})
@@ -327,39 +346,111 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     if user and user["id"] in bartender.get("blocked_users", []):
         raise HTTPException(status_code=403, detail="You are blocked by this bartender")
     
-    # Check if following
+    # Check follow status
     is_following = user and user["id"] in bartender.get("followers", [])
+    is_pending = user and user["id"] in bartender.get("follow_requests", [])
     bartender["is_following"] = is_following
+    bartender["is_pending"] = is_pending
     bartender["follower_count"] = len(bartender.get("followers", []))
     
     return bartender
 
-# ===================== FOLLOW SYSTEM =====================
-@api_router.post("/follow/{bartender_id}")
-async def follow_bartender(bartender_id: str, user: dict = Depends(get_current_user)):
-    bartender = await db.users.find_one({"id": bartender_id, "role": UserRole.BARTENDER})
-    if not bartender:
-        raise HTTPException(status_code=404, detail="Bartender not found")
+@api_router.get("/user/{username}")
+async def get_user_profile(username: str, user: dict = Depends(get_optional_user)):
+    profile = await db.users.find_one({"username": username}, {"_id": 0, "password_hash": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    if user["id"] in bartender.get("blocked_users", []):
-        raise HTTPException(status_code=403, detail="You are blocked by this bartender")
+    # Check if blocked
+    if user and user["id"] in profile.get("blocked_users", []):
+        raise HTTPException(status_code=403, detail="You are blocked by this user")
     
-    await db.users.update_one({"id": bartender_id}, {"$addToSet": {"followers": user["id"]}})
-    await db.users.update_one({"id": user["id"]}, {"$addToSet": {"following": bartender_id}})
+    # Check follow status
+    is_following = user and user["id"] in profile.get("followers", [])
+    is_pending = user and user["id"] in profile.get("follow_requests", [])
+    profile["is_following"] = is_following
+    profile["is_pending"] = is_pending
+    profile["follower_count"] = len(profile.get("followers", []))
+    profile["following_count"] = len(profile.get("following", []))
     
-    return {"success": True, "message": "Now following"}
+    return profile
 
-@api_router.delete("/follow/{bartender_id}")
-async def unfollow_bartender(bartender_id: str, user: dict = Depends(get_current_user)):
-    await db.users.update_one({"id": bartender_id}, {"$pull": {"followers": user["id"]}})
-    await db.users.update_one({"id": user["id"]}, {"$pull": {"following": bartender_id}})
+# ===================== FOLLOW SYSTEM =====================
+@api_router.post("/follow/{target_id}")
+async def follow_user(target_id: str, user: dict = Depends(get_current_user)):
+    if target_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot follow yourself")
+    
+    target = await db.users.find_one({"id": target_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user["id"] in target.get("blocked_users", []):
+        raise HTTPException(status_code=403, detail="You are blocked by this user")
+    
+    # Check if already following
+    if user["id"] in target.get("followers", []):
+        return {"success": True, "message": "Already following", "status": "following"}
+    
+    # Check if already requested
+    if user["id"] in target.get("follow_requests", []):
+        return {"success": True, "message": "Request already pending", "status": "pending"}
+    
+    # Check if approval is required
+    if target.get("require_follow_approval", False):
+        # Add to follow requests
+        await db.users.update_one({"id": target_id}, {"$addToSet": {"follow_requests": user["id"]}})
+        await db.users.update_one({"id": user["id"]}, {"$addToSet": {"pending_follows": target_id}})
+        return {"success": True, "message": "Follow request sent", "status": "pending"}
+    else:
+        # Direct follow
+        await db.users.update_one({"id": target_id}, {"$addToSet": {"followers": user["id"]}})
+        await db.users.update_one({"id": user["id"]}, {"$addToSet": {"following": target_id}})
+        return {"success": True, "message": "Now following", "status": "following"}
+
+@api_router.delete("/follow/{target_id}")
+async def unfollow_user(target_id: str, user: dict = Depends(get_current_user)):
+    # Remove from followers/following
+    await db.users.update_one({"id": target_id}, {"$pull": {"followers": user["id"]}})
+    await db.users.update_one({"id": user["id"]}, {"$pull": {"following": target_id}})
+    # Also remove any pending requests
+    await db.users.update_one({"id": target_id}, {"$pull": {"follow_requests": user["id"]}})
+    await db.users.update_one({"id": user["id"]}, {"$pull": {"pending_follows": target_id}})
     return {"success": True, "message": "Unfollowed"}
+
+@api_router.get("/follow-requests")
+async def get_follow_requests(user: dict = Depends(get_current_user)):
+    request_ids = user.get("follow_requests", [])
+    requesters = await db.users.find({"id": {"$in": request_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return requesters
+
+@api_router.post("/follow-requests/{requester_id}/approve")
+async def approve_follow_request(requester_id: str, user: dict = Depends(get_current_user)):
+    # Check if request exists
+    if requester_id not in user.get("follow_requests", []):
+        raise HTTPException(status_code=404, detail="Follow request not found")
+    
+    # Remove from requests and add to followers
+    await db.users.update_one({"id": user["id"]}, {
+        "$pull": {"follow_requests": requester_id},
+        "$addToSet": {"followers": requester_id}
+    })
+    # Update requester
+    await db.users.update_one({"id": requester_id}, {
+        "$pull": {"pending_follows": user["id"]},
+        "$addToSet": {"following": user["id"]}
+    })
+    return {"success": True, "message": "Follow request approved"}
+
+@api_router.post("/follow-requests/{requester_id}/deny")
+async def deny_follow_request(requester_id: str, user: dict = Depends(get_current_user)):
+    # Remove from requests
+    await db.users.update_one({"id": user["id"]}, {"$pull": {"follow_requests": requester_id}})
+    await db.users.update_one({"id": requester_id}, {"$pull": {"pending_follows": user["id"]}})
+    return {"success": True, "message": "Follow request denied"}
 
 @api_router.get("/followers")
 async def get_followers(user: dict = Depends(get_current_user)):
-    if user["role"] != UserRole.BARTENDER:
-        raise HTTPException(status_code=403, detail="Only bartenders have followers")
-    
     follower_ids = user.get("followers", [])
     followers = await db.users.find({"id": {"$in": follower_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return followers

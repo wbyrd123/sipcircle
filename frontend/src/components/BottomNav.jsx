@@ -1,22 +1,46 @@
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "../App";
-import { Home, Search, MessageCircle, Calendar, User } from "lucide-react";
+import { useAuth, API } from "../App";
+import axios from "axios";
+import { Home, Search, MessageCircle, Calendar, User, UserPlus } from "lucide-react";
 
 const BottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [followRequestCount, setFollowRequestCount] = useState(0);
 
   const isBartender = user?.role === "bartender";
+
+  // Fetch follow request count
+  useEffect(() => {
+    const fetchRequestCount = async () => {
+      if (!token || !user?.require_follow_approval) return;
+      try {
+        const response = await axios.get(`${API}/follow-requests`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setFollowRequestCount(response.data.length);
+      } catch (e) {
+        console.error("Error fetching follow requests:", e);
+      }
+    };
+    fetchRequestCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchRequestCount, 30000);
+    return () => clearInterval(interval);
+  }, [token, user?.require_follow_approval]);
 
   const navItems = isBartender ? [
     { icon: Home, label: "Home", path: "/dashboard" },
     { icon: Search, label: "Discover", path: "/discover" },
+    { icon: UserPlus, label: "Requests", path: "/follow-requests", badge: followRequestCount },
     { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: User, label: "Profile", path: "/edit-profile" }
   ] : [
     { icon: Home, label: "Home", path: "/home" },
     { icon: Search, label: "Discover", path: "/discover" },
+    { icon: UserPlus, label: "Requests", path: "/follow-requests", badge: followRequestCount },
     { icon: Calendar, label: "Invites", path: "/invites" },
     { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: User, label: "Profile", path: "/edit-profile" }
@@ -31,12 +55,19 @@ const BottomNav = () => {
           <button
             key={item.path}
             onClick={() => navigate(item.path)}
-            className={`flex flex-col items-center justify-center w-full h-full transition-colors ${
+            className={`relative flex flex-col items-center justify-center w-full h-full transition-colors ${
               isActive(item.path) ? "text-primary" : "text-white/40 hover:text-white/60"
             }`}
             data-testid={`nav-${item.label.toLowerCase()}`}
           >
-            <item.icon className="w-5 h-5" />
+            <div className="relative">
+              <item.icon className="w-5 h-5" />
+              {item.badge > 0 && (
+                <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
+            </div>
             <span className="text-[10px] mt-1 font-medium">{item.label}</span>
           </button>
         ))}
