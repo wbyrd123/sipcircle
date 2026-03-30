@@ -12,8 +12,6 @@ import CustomerDashboard from "./pages/CustomerDashboard";
 import BartenderProfile from "./pages/BartenderProfile";
 import UserProfile from "./pages/UserProfile";
 import EditProfile from "./pages/EditProfile";
-import MessagesPage from "./pages/MessagesPage";
-import ConversationPage from "./pages/ConversationPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import InvitesPage from "./pages/InvitesPage";
 import FollowersPage from "./pages/FollowersPage";
@@ -135,8 +133,6 @@ const AppRoutes = () => {
       
       {/* Shared Routes */}
       <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
-      <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
-      <Route path="/messages/:partnerId" element={<ProtectedRoute><ConversationPage /></ProtectedRoute>} />
       <Route path="/discover" element={<ProtectedRoute><DiscoverPage /></ProtectedRoute>} />
       <Route path="/invites" element={<ProtectedRoute><InvitesPage /></ProtectedRoute>} />
       <Route path="/follow-requests" element={<ProtectedRoute><FollowRequestsPage /></ProtectedRoute>} />

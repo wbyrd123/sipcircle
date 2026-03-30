@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
-  Wine, MapPin, Clock, Users, MessageCircle, QrCode, DollarSign, 
+  Wine, MapPin, Clock, Users, QrCode, DollarSign, 
   ExternalLink, Copy, Plus, Settings, UserPlus, Loader2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,7 +16,7 @@ const BartenderDashboard = () => {
   const navigate = useNavigate();
   const { user, token, updateUser } = useAuth();
   const [showQR, setShowQR] = useState(false);
-  const [stats, setStats] = useState({ followers: 0, messages: 0 });
+  const [stats, setStats] = useState({ followers: 0 });
   const [suggestions, setSuggestions] = useState([]);
   const [followingUsers, setFollowingUsers] = useState({});
 
@@ -29,12 +29,10 @@ const BartenderDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const [followersRes, messagesRes] = await Promise.all([
-        axios.get(`${API}/followers`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/messages/conversations`, { headers: { Authorization: `Bearer ${token}` } })
-      ]);
-      const unreadCount = messagesRes.data.reduce((acc, conv) => acc + conv.unread_count, 0);
-      setStats({ followers: followersRes.data.length, messages: unreadCount });
+      const followersRes = await axios.get(`${API}/followers`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      setStats({ followers: followersRes.data.length });
     } catch (e) {
       console.error("Error fetching stats:", e);
     }
@@ -169,29 +167,15 @@ const BartenderDashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => navigate("/followers")}
-            className="glass-card-hover p-6 text-left"
-            data-testid="followers-card"
-          >
-            <Users className="w-8 h-8 text-primary mb-3" />
-            <p className="text-3xl font-bold text-white">{stats.followers}</p>
-            <p className="text-white/60 text-sm">Followers</p>
-          </button>
-          <button 
-            onClick={() => navigate("/messages")}
-            className="glass-card-hover p-6 text-left relative"
-            data-testid="messages-card"
-          >
-            <MessageCircle className="w-8 h-8 text-primary mb-3" />
-            <p className="text-3xl font-bold text-white">{stats.messages}</p>
-            <p className="text-white/60 text-sm">Unread Messages</p>
-            {stats.messages > 0 && (
-              <span className="absolute top-4 right-4 w-3 h-3 bg-secondary rounded-full animate-pulse" />
-            )}
-          </button>
-        </div>
+        <button 
+          onClick={() => navigate("/followers")}
+          className="glass-card-hover p-6 text-left w-full"
+          data-testid="followers-card"
+        >
+          <Users className="w-8 h-8 text-primary mb-3" />
+          <p className="text-3xl font-bold text-white">{stats.followers}</p>
+          <p className="text-white/60 text-sm">Followers</p>
+        </button>
 
         {/* Payment Links */}
         <div className="glass-card p-6">

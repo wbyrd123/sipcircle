@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth, API } from "../App";
 import axios from "axios";
-import { Home, Search, MessageCircle, Calendar, User, UserPlus } from "lucide-react";
+import { Home, Search, Calendar, User, UserPlus } from "lucide-react";
 
 const BottomNav = () => {
   const navigate = useNavigate();
@@ -35,14 +35,12 @@ const BottomNav = () => {
     { icon: Home, label: "Home", path: "/dashboard" },
     { icon: Search, label: "Discover", path: "/discover" },
     { icon: UserPlus, label: "Requests", path: "/follow-requests", badge: followRequestCount },
-    { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: User, label: "Profile", path: "/edit-profile" }
   ] : [
     { icon: Home, label: "Home", path: "/home" },
     { icon: Search, label: "Discover", path: "/discover" },
     { icon: UserPlus, label: "Requests", path: "/follow-requests", badge: followRequestCount },
     { icon: Calendar, label: "Invites", path: "/invites" },
-    { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: User, label: "Profile", path: "/edit-profile" }
   ];
 

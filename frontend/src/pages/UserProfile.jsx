@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
-  MapPin, Clock, Users, MessageCircle, QrCode, DollarSign, 
+  MapPin, Clock, Users, QrCode, DollarSign, 
   ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine
 } from "lucide-react";
 import { toast } from "sonner";
@@ -77,14 +77,6 @@ const UserProfile = () => {
     } finally {
       setFollowLoading(false);
     }
-  };
-
-  const handleMessage = () => {
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
-    navigate(`/messages/${profile.id}`);
   };
 
   const handleShare = async () => {
@@ -189,40 +181,29 @@ const UserProfile = () => {
             </span>
           </div>
           {user && !isOwnProfile && (
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleFollow}
-                disabled={followLoading}
-                size="sm"
-                className={
-                  profile.is_following 
-                    ? "btn-secondary" 
-                    : profile.is_pending 
-                      ? "bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                      : "btn-primary"
-                }
-                data-testid="follow-btn"
-              >
-                {followLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : profile.is_following ? (
-                  <><UserMinus className="w-4 h-4 mr-1" /> Following</>
-                ) : profile.is_pending ? (
-                  <>Requested</>
-                ) : (
-                  <><UserPlus className="w-4 h-4 mr-1" /> Follow</>
-                )}
-              </Button>
-              <Button 
-                onClick={handleMessage}
-                variant="outline"
-                size="sm"
-                className="border-white/20 text-white hover:bg-white/5"
-                data-testid="message-btn"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button 
+              onClick={handleFollow}
+              disabled={followLoading}
+              size="sm"
+              className={
+                profile.is_following 
+                  ? "btn-secondary" 
+                  : profile.is_pending 
+                    ? "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+                    : "btn-primary"
+              }
+              data-testid="follow-btn"
+            >
+              {followLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : profile.is_following ? (
+                <><UserMinus className="w-4 h-4 mr-1" /> Following</>
+              ) : profile.is_pending ? (
+                <>Requested</>
+              ) : (
+                <><UserPlus className="w-4 h-4 mr-1" /> Follow</>
+              )}
+            </Button>
           )}
         </div>
 

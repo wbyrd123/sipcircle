@@ -6,7 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
-  Wine, MapPin, Clock, Users, MessageCircle, QrCode, DollarSign, 
+  Wine, MapPin, Clock, Users, QrCode, DollarSign, 
   ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
@@ -76,14 +76,6 @@ const BartenderProfile = () => {
     } finally {
       setFollowLoading(false);
     }
-  };
-
-  const handleMessage = () => {
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
-    navigate(`/messages/${bartender.id}`);
   };
 
   const handleShare = async () => {
@@ -179,38 +171,28 @@ const BartenderProfile = () => {
           </div>
           <div className="flex gap-2">
             {user && user.id !== bartender.id && (
-              <>
-                <Button 
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={
-                    bartender.is_following 
-                      ? "btn-secondary" 
-                      : bartender.is_pending 
-                        ? "bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                        : "btn-primary"
-                  }
-                  data-testid="follow-btn"
-                >
-                  {followLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : bartender.is_following ? (
-                    <><UserMinus className="w-4 h-4 mr-2" /> Following</>
-                  ) : bartender.is_pending ? (
-                    <>Requested</>
-                  ) : (
-                    <><UserPlus className="w-4 h-4 mr-2" /> Follow</>
-                  )}
-                </Button>
-                <Button 
-                  onClick={handleMessage}
-                  variant="outline"
-                  className="border-white/20 text-white hover:bg-white/5"
-                  data-testid="message-btn"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                </Button>
-              </>
+              <Button 
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={
+                  bartender.is_following 
+                    ? "btn-secondary" 
+                    : bartender.is_pending 
+                      ? "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+                      : "btn-primary"
+                }
+                data-testid="follow-btn"
+              >
+                {followLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : bartender.is_following ? (
+                  <><UserMinus className="w-4 h-4 mr-2" /> Following</>
+                ) : bartender.is_pending ? (
+                  <>Requested</>
+                ) : (
+                  <><UserPlus className="w-4 h-4 mr-2" /> Follow</>
+                )}
+              </Button>
             )}
           </div>
         </div>

@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
-  Wine, Search, MessageCircle, Calendar, Users, MapPin, Clock, Settings, UserPlus, Loader2, Sparkles
+  Wine, Search, Calendar, Users, MapPin, Settings, UserPlus, Loader2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -119,24 +119,15 @@ const CustomerDashboard = () => {
         </button>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => navigate("/messages")}
-            className="glass-card-hover p-5 text-left"
-            data-testid="messages-btn"
-          >
-            <MessageCircle className="w-7 h-7 text-primary mb-2" />
-            <p className="text-white font-medium">Messages</p>
-          </button>
-          <button 
-            onClick={() => navigate("/invites")}
-            className="glass-card-hover p-5 text-left"
-            data-testid="invites-btn"
-          >
-            <Calendar className="w-7 h-7 text-primary mb-2" />
-            <p className="text-white font-medium">Invites</p>
-          </button>
-        </div>
+        <button 
+          onClick={() => navigate("/invites")}
+          className="glass-card-hover p-5 text-left w-full"
+          data-testid="invites-btn"
+        >
+          <Calendar className="w-7 h-7 text-primary mb-2" />
+          <p className="text-white font-medium">Invites</p>
+          <p className="text-white/50 text-sm">Plan meetups with friends</p>
+        </button>
 
         {/* Following */}
         <div className="glass-card p-6">
