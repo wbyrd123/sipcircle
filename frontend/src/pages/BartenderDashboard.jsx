@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
   Wine, MapPin, Clock, Users, MessageCircle, QrCode, DollarSign, 
-  ExternalLink, Copy, Plus, Settings
+  ExternalLink, Copy, Plus, Settings, UserPlus, Loader2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,11 +17,14 @@ const BartenderDashboard = () => {
   const { user, token, updateUser } = useAuth();
   const [showQR, setShowQR] = useState(false);
   const [stats, setStats] = useState({ followers: 0, messages: 0 });
+  const [suggestions, setSuggestions] = useState([]);
+  const [followingUsers, setFollowingUsers] = useState({});
 
   const profileUrl = `${window.location.origin}/b/${user?.username}`;
 
   useEffect(() => {
     fetchStats();
+    fetchSuggestions();
   }, []);
 
   const fetchStats = async () => {
@@ -37,6 +40,39 @@ const BartenderDashboard = () => {
     }
   };
 
+  const fetchSuggestions = async () => {
+    try {
+      const response = await axios.get(`${API}/suggestions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuggestions(response.data);
+    } catch (e) {
+      console.error("Error fetching suggestions:", e);
+    }
+  };
+
+  const handleFollow = async (targetUser) => {
+    setFollowingUsers(prev => ({ ...prev, [targetUser.id]: true }));
+    try {
+      const response = await axios.post(`${API}/follow/${targetUser.id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.status === "pending") {
+        toast.success("Follow request sent!");
+        setSuggestions(prev => prev.map(s => 
+          s.id === targetUser.id ? { ...s, is_pending: true } : s
+        ));
+      } else {
+        toast.success(`Now following ${targetUser.name}!`);
+        setSuggestions(prev => prev.filter(s => s.id !== targetUser.id));
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to follow");
+    } finally {
+      setFollowingUsers(prev => ({ ...prev, [targetUser.id]: false }));
+    }
+  };
+
   const copyProfileLink = () => {
     navigator.clipboard.writeText(profileUrl);
     toast.success("Profile link copied!");
@@ -49,6 +85,10 @@ const BartenderDashboard = () => {
 
   const getInitials = (name) => {
     return name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?";
+  };
+
+  const getProfileUrl = (targetUser) => {
+    return targetUser.role === "bartender" ? `/b/${targetUser.username}` : `/u/${targetUser.username}`;
   };
 
   if (!user) return null;
@@ -205,6 +245,63 @@ const BartenderDashboard = () => {
             )}
           </div>
         </div>
+
+        {/* People You May Know */}
+        {suggestions.length > 0 && (
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-secondary" />
+                People You May Know
+              </h2>
+            </div>
+            <div className="space-y-3">
+              {suggestions.slice(0, 4).map((suggestedUser) => (
+                <div
+                  key={suggestedUser.id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white/5"
+                >
+                  <button
+                    onClick={() => navigate(getProfileUrl(suggestedUser))}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    <Avatar className="w-10 h-10 border border-white/10">
+                      <AvatarImage src={getImageUrl(suggestedUser.profile_image)} />
+                      <AvatarFallback className="bg-secondary/20 text-secondary text-sm">
+                        {getInitials(suggestedUser.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium truncate text-sm">{suggestedUser.name}</p>
+                      <p className="text-white/60 text-xs">
+                        {suggestedUser.role === 'bartender' ? 'Bartender' : 'Bar-Goer'}
+                        {suggestedUser.mutual_count > 0 && ` · ${suggestedUser.mutual_count} mutual`}
+                      </p>
+                    </div>
+                  </button>
+                  <Button
+                    onClick={() => handleFollow(suggestedUser)}
+                    disabled={followingUsers[suggestedUser.id] || suggestedUser.is_pending}
+                    size="sm"
+                    className={suggestedUser.is_pending 
+                      ? "bg-white/10 text-white/60 border border-white/20 text-xs px-2" 
+                      : "btn-primary text-xs px-2"
+                    }
+                    data-testid={`follow-suggestion-${suggestedUser.id}`}
+                  >
+                    {followingUsers[suggestedUser.id] ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : suggestedUser.is_pending ? (
+                      "Requested"
+                    ) : (
+                      <><UserPlus className="w-3 h-3 mr-1" /> Follow</>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Work Locations */}
         <div className="glass-card p-6">

@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
-  Wine, Search, MessageCircle, Calendar, Users, MapPin, Clock, Settings
+  Wine, Search, MessageCircle, Calendar, Users, MapPin, Clock, Settings, UserPlus, Loader2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,7 +15,9 @@ const CustomerDashboard = () => {
   const { user, token } = useAuth();
   const [following, setFollowing] = useState([]);
   const [invites, setInvites] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [followingUsers, setFollowingUsers] = useState({});
 
   useEffect(() => {
     fetchData();
@@ -23,16 +25,43 @@ const CustomerDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [followingRes, invitesRes] = await Promise.all([
+      const [followingRes, invitesRes, suggestionsRes] = await Promise.all([
         axios.get(`${API}/following`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/invites`, { headers: { Authorization: `Bearer ${token}` } })
+        axios.get(`${API}/invites`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/suggestions`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
       setFollowing(followingRes.data);
-      setInvites(invitesRes.data.slice(0, 3)); // Latest 3
+      setInvites(invitesRes.data.slice(0, 3));
+      setSuggestions(suggestionsRes.data);
     } catch (e) {
       console.error("Error fetching data:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFollow = async (targetUser) => {
+    setFollowingUsers(prev => ({ ...prev, [targetUser.id]: true }));
+    try {
+      const response = await axios.post(`${API}/follow/${targetUser.id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.status === "pending") {
+        toast.success("Follow request sent!");
+        // Update suggestions to show pending state
+        setSuggestions(prev => prev.map(s => 
+          s.id === targetUser.id ? { ...s, is_pending: true } : s
+        ));
+      } else {
+        toast.success(`Now following ${targetUser.name}!`);
+        // Remove from suggestions and add to following
+        setSuggestions(prev => prev.filter(s => s.id !== targetUser.id));
+        setFollowing(prev => [...prev, targetUser]);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to follow");
+    } finally {
+      setFollowingUsers(prev => ({ ...prev, [targetUser.id]: false }));
     }
   };
 
@@ -43,6 +72,10 @@ const CustomerDashboard = () => {
 
   const getInitials = (name) => {
     return name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?";
+  };
+
+  const getProfileUrl = (user) => {
+    return user.role === "bartender" ? `/b/${user.username}` : `/u/${user.username}`;
   };
 
   if (!user) return null;
@@ -112,7 +145,7 @@ const CustomerDashboard = () => {
               <Users className="w-5 h-5 text-primary" />
               Following
             </h2>
-            <span className="text-white/60 text-sm">{following.length} bartenders</span>
+            <span className="text-white/60 text-sm">{following.length} people</span>
           </div>
 
           {loading ? (
@@ -121,29 +154,30 @@ const CustomerDashboard = () => {
             </div>
           ) : following.length > 0 ? (
             <div className="space-y-3">
-              {following.slice(0, 5).map((bartender) => (
+              {following.slice(0, 5).map((followedUser) => (
                 <button
-                  key={bartender.id}
-                  onClick={() => navigate(`/b/${bartender.username}`)}
+                  key={followedUser.id}
+                  onClick={() => navigate(getProfileUrl(followedUser))}
                   className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-left"
-                  data-testid={`following-${bartender.username}`}
+                  data-testid={`following-${followedUser.username}`}
                 >
                   <Avatar className="w-12 h-12 border border-white/10">
-                    <AvatarImage src={getImageUrl(bartender.profile_image)} />
+                    <AvatarImage src={getImageUrl(followedUser.profile_image)} />
                     <AvatarFallback className="bg-primary/20 text-primary">
-                      {getInitials(bartender.name)}
+                      {getInitials(followedUser.name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{bartender.name}</p>
-                    <p className="text-white/60 text-sm">@{bartender.username}</p>
+                    <p className="text-white font-medium truncate">{followedUser.name}</p>
+                    <p className="text-white/60 text-sm">@{followedUser.username}</p>
                   </div>
-                  {bartender.work_locations?.[0] && (
-                    <div className="flex items-center gap-1 text-white/40 text-xs">
-                      <MapPin className="w-3 h-3" />
-                      <span className="truncate max-w-[100px]">{bartender.work_locations[0].name}</span>
-                    </div>
-                  )}
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    followedUser.role === 'bartender' 
+                      ? 'bg-primary/20 text-primary' 
+                      : 'bg-secondary/20 text-secondary'
+                  }`}>
+                    {followedUser.role === 'bartender' ? 'Bartender' : 'Bar-Goer'}
+                  </span>
                 </button>
               ))}
               {following.length > 5 && (
@@ -158,17 +192,76 @@ const CustomerDashboard = () => {
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-white/40 mb-4">Not following any bartenders yet</p>
+              <p className="text-white/40 mb-4">Not following anyone yet</p>
               <Button 
                 onClick={() => navigate("/discover")}
                 className="btn-primary btn-press"
               >
                 <Search className="w-4 h-4 mr-2" />
-                Discover Bartenders
+                Discover People
               </Button>
             </div>
           )}
         </div>
+
+        {/* People You May Know */}
+        {suggestions.length > 0 && (
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-secondary" />
+                People You May Know
+              </h2>
+            </div>
+            <div className="space-y-3">
+              {suggestions.slice(0, 5).map((suggestedUser) => (
+                <div
+                  key={suggestedUser.id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white/5"
+                >
+                  <button
+                    onClick={() => navigate(getProfileUrl(suggestedUser))}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    <Avatar className="w-12 h-12 border border-white/10">
+                      <AvatarImage src={getImageUrl(suggestedUser.profile_image)} />
+                      <AvatarFallback className="bg-secondary/20 text-secondary">
+                        {getInitials(suggestedUser.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium truncate">{suggestedUser.name}</p>
+                      <p className="text-white/60 text-sm">@{suggestedUser.username}</p>
+                      {suggestedUser.mutual_count > 0 && (
+                        <p className="text-white/40 text-xs">
+                          {suggestedUser.mutual_count} mutual connection{suggestedUser.mutual_count > 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                  <Button
+                    onClick={() => handleFollow(suggestedUser)}
+                    disabled={followingUsers[suggestedUser.id] || suggestedUser.is_pending}
+                    size="sm"
+                    className={suggestedUser.is_pending 
+                      ? "bg-white/10 text-white/60 border border-white/20" 
+                      : "btn-primary"
+                    }
+                    data-testid={`follow-suggestion-${suggestedUser.id}`}
+                  >
+                    {followingUsers[suggestedUser.id] ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : suggestedUser.is_pending ? (
+                      "Requested"
+                    ) : (
+                      <><UserPlus className="w-4 h-4 mr-1" /> Follow</>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Upcoming Invites */}
         {invites.length > 0 && (

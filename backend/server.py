@@ -461,6 +461,105 @@ async def get_following(user: dict = Depends(get_current_user)):
     following = await db.users.find({"id": {"$in": following_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return following
 
+# ===================== PEOPLE YOU MAY KNOW =====================
+@api_router.get("/suggestions")
+async def get_people_you_may_know(user: dict = Depends(get_current_user)):
+    """
+    Returns suggested users based on:
+    1. Mutual followers (people followed by people you follow)
+    2. Users with similar interests (same locations for bartenders)
+    3. Random popular users you don't follow yet
+    """
+    user_id = user["id"]
+    following_ids = set(user.get("following", []))
+    blocked_ids = set(user.get("blocked_users", []))
+    pending_ids = set(user.get("pending_follows", []))
+    
+    # Exclude: self, already following, pending requests, blocked
+    exclude_ids = following_ids | {user_id} | blocked_ids | pending_ids
+    
+    suggestions = {}
+    
+    # 1. Mutual connections: Get users followed by people you follow
+    if following_ids:
+        following_users = await db.users.find(
+            {"id": {"$in": list(following_ids)}},
+            {"following": 1, "followers": 1}
+        ).to_list(100)
+        
+        for followed_user in following_users:
+            # People they follow that you don't
+            for their_following in followed_user.get("following", []):
+                if their_following not in exclude_ids:
+                    if their_following not in suggestions:
+                        suggestions[their_following] = {"score": 0, "reason": "mutual"}
+                    suggestions[their_following]["score"] += 2
+            
+            # People who follow them that you don't follow
+            for their_follower in followed_user.get("followers", []):
+                if their_follower not in exclude_ids:
+                    if their_follower not in suggestions:
+                        suggestions[their_follower] = {"score": 0, "reason": "mutual"}
+                    suggestions[their_follower]["score"] += 1
+    
+    # 2. For bartenders: Suggest other bartenders at similar locations
+    if user.get("role") == "bartender" and user.get("work_locations"):
+        user_location_names = [loc.get("name", "").lower() for loc in user.get("work_locations", [])]
+        if user_location_names:
+            similar_bartenders = await db.users.find(
+                {
+                    "role": "bartender",
+                    "id": {"$nin": list(exclude_ids)},
+                    "work_locations.name": {"$regex": "|".join(user_location_names), "$options": "i"}
+                },
+                {"_id": 0, "password_hash": 0}
+            ).to_list(20)
+            
+            for bartender in similar_bartenders:
+                if bartender["id"] not in suggestions:
+                    suggestions[bartender["id"]] = {"score": 0, "reason": "location"}
+                suggestions[bartender["id"]]["score"] += 3
+    
+    # 3. Add popular users (high follower count) not yet followed
+    popular_users = await db.users.find(
+        {"id": {"$nin": list(exclude_ids)}},
+        {"_id": 0, "password_hash": 0}
+    ).sort("followers", -1).limit(50).to_list(50)
+    
+    for pop_user in popular_users:
+        follower_count = len(pop_user.get("followers", []))
+        if pop_user["id"] not in suggestions:
+            suggestions[pop_user["id"]] = {"score": 0, "reason": "popular"}
+        suggestions[pop_user["id"]]["score"] += min(follower_count, 5)  # Cap at 5 points
+    
+    # Sort by score and get top 10
+    sorted_suggestions = sorted(suggestions.items(), key=lambda x: x[1]["score"], reverse=True)[:10]
+    suggestion_ids = [s[0] for s in sorted_suggestions]
+    
+    if not suggestion_ids:
+        return []
+    
+    # Fetch full user data
+    suggested_users = await db.users.find(
+        {"id": {"$in": suggestion_ids}},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(10)
+    
+    # Add reason and mutual count to each suggestion
+    user_map = {u["id"]: u for u in suggested_users}
+    result = []
+    for user_id, data in sorted_suggestions:
+        if user_id in user_map:
+            user_data = user_map[user_id]
+            # Count mutual connections
+            their_followers = set(user_data.get("followers", []))
+            mutual_count = len(following_ids & their_followers)
+            user_data["mutual_count"] = mutual_count
+            user_data["suggestion_reason"] = data["reason"]
+            result.append(user_data)
+    
+    return result
+
 # ===================== BLOCK SYSTEM =====================
 @api_router.post("/block/{user_id}")
 async def block_user(user_id: str, user: dict = Depends(get_current_user)):
