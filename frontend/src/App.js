@@ -17,6 +17,7 @@ import InvitesPage from "./pages/InvitesPage";
 import FollowersPage from "./pages/FollowersPage";
 import FollowRequestsPage from "./pages/FollowRequestsPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -145,6 +146,7 @@ const AppRoutes = () => {
       
       {/* Public Pages */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfUse />} />
       
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" />} />

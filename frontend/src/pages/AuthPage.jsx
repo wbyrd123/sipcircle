@@ -239,7 +239,7 @@ const AuthPage = () => {
                       />
                     </div>
                     
-                    {/* Age Verification */}
+                    {/* Age Verification & Terms Acknowledgment */}
                     <div className="flex items-start gap-3 p-4 rounded-lg bg-white/5 border border-white/10">
                       <Checkbox
                         id="age-verification"
@@ -252,11 +252,18 @@ const AuthPage = () => {
                         htmlFor="age-verification" 
                         className="text-sm text-white/70 leading-relaxed cursor-pointer"
                       >
-                        I confirm that I am of <span className="text-white font-medium">legal drinking age</span> in 
-                        my jurisdiction and agree to the{" "}
+                        I confirm that I am of <span className="text-white font-medium">legal drinking age</span> in my jurisdiction. 
+                        I understand that SipCircle is intended only for discovering, following, and viewing public bartender, 
+                        venue, event, and nightlife-related content. I agree not to use SipCircle for harassment, stalking, 
+                        predatory behavior, impersonation, unlawful conduct, or any use outside the intended purpose of the platform. 
+                        I agree to the{" "}
+                        <Link to="/terms" className="text-primary hover:underline">
+                          Terms of Use
+                        </Link>
+                        {" "}and{" "}
                         <Link to="/privacy" className="text-primary hover:underline">
                           Privacy Policy
-                        </Link>
+                        </Link>.
                       </label>
                     </div>
 
