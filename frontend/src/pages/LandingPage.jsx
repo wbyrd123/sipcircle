@@ -1,6 +1,6 @@
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
-import { Wine, Users, MessageCircle, MapPin, QrCode, DollarSign } from "lucide-react";
+import { Wine, Users, Calendar, MapPin, QrCode, DollarSign } from "lucide-react";
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ const LandingPage = () => {
     { icon: Users, title: "Build Your Following", desc: "Connect with regulars and grow your clientele" },
     { icon: DollarSign, title: "Easy Tips", desc: "Venmo & CashApp integration for seamless tipping" },
     { icon: MapPin, title: "Share Your Schedule", desc: "Let followers know where you're working" },
-    { icon: MessageCircle, title: "Direct Messages", desc: "Stay connected with your favorite patrons" },
+    { icon: Calendar, title: "Plan Meetups", desc: "Invite friends to your favorite spots" },
     { icon: QrCode, title: "QR Code Profile", desc: "Scannable codes for instant profile access" },
     { icon: Wine, title: "Happy Hour Updates", desc: "Share specials and drink menus" }
   ];
@@ -135,7 +135,7 @@ const LandingPage = () => {
             <Link to="/privacy" className="text-white/40 text-sm hover:text-white/60 transition-colors">
               Privacy Policy
             </Link>
-            <p className="text-white/40 text-sm">© 2025 PourCircle. Drink responsibly.</p>
+            <p className="text-white/40 text-sm">© 2026 PourCircle. Drink responsibly.</p>
           </div>
         </div>
       </footer>
