@@ -52,7 +52,7 @@ const AuthPage = () => {
     setLoading(true);
     try {
       const user = await register({ ...registerForm, role });
-      toast.success(`Welcome to SipCircle, ${user.name}!`);
+      toast.success(`Welcome to PourCircle, ${user.name}!`);
       navigate(user.role === "bartender" ? "/dashboard" : "/home");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Registration failed");
@@ -87,7 +87,7 @@ const AuthPage = () => {
           </Button>
           <div className="flex items-center gap-2">
             <Wine className="w-6 h-6 text-primary" />
-            <span className="text-xl font-bold text-white">SipCircle</span>
+            <span className="text-xl font-bold text-white">PourCircle</span>
           </div>
         </header>
 
@@ -150,7 +150,7 @@ const AuthPage = () => {
                 <TabsContent value="register" className="space-y-6">
                   <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
-                      Join SipCircle
+                      Join PourCircle
                     </h1>
                     <p className="text-white/60 text-sm">Create your account</p>
                   </div>
@@ -253,8 +253,8 @@ const AuthPage = () => {
                         className="text-sm text-white/70 leading-relaxed cursor-pointer"
                       >
                         I confirm that I am of <span className="text-white font-medium">legal drinking age</span> in my jurisdiction. 
-                        I understand that SipCircle is intended only for discovering, following, and viewing public bartender, 
-                        venue, event, and nightlife-related content. I agree not to use SipCircle for harassment, stalking, 
+                        I understand that PourCircle is intended only for discovering, following, and viewing public bartender, 
+                        venue, event, and nightlife-related content. I agree not to use PourCircle for harassment, stalking, 
                         predatory behavior, impersonation, unlawful conduct, or any use outside the intended purpose of the platform. 
                         I agree to the{" "}
                         <Link to="/terms" className="text-primary hover:underline">

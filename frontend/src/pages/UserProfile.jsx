@@ -81,7 +81,7 @@ const UserProfile = () => {
 
   const handleShare = async () => {
     if (navigator.share) {
-      await navigator.share({ title: `${profile.name} on SipCircle`, url: profileUrl });
+      await navigator.share({ title: `${profile.name} on PourCircle`, url: profileUrl });
     } else {
       navigator.clipboard.writeText(profileUrl);
       toast.success("Link copied!");
@@ -378,7 +378,7 @@ const UserProfile = () => {
           <div className="glass-card p-5 text-center">
             <p className="text-white/60 mb-3 text-sm">Sign up to follow and message this user</p>
             <Button onClick={() => navigate("/auth")} className="btn-primary">
-              Join SipCircle
+              Join PourCircle
             </Button>
           </div>
         )}

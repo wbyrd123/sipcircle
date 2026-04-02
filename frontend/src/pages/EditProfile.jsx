@@ -654,7 +654,7 @@ const EditProfile = () => {
               <AlertDialogTitle className="text-white">Delete your account?</AlertDialogTitle>
               <AlertDialogDescription className="text-white/60">
                 This action cannot be undone. This will permanently delete your account, 
-                all your messages, followers, and remove your profile from SipCircle.
+                all your messages, followers, and remove your profile from PourCircle.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
