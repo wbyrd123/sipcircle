@@ -19,7 +19,7 @@ const PrivacyPolicy = () => {
         </Button>
         <div className="flex items-center gap-2">
           <Wine className="w-5 h-5 text-primary" />
-          <span className="text-lg font-semibold text-white">SipCircle</span>
+          <span className="text-lg font-semibold text-white">PourCircle</span>
         </div>
       </header>
 
@@ -34,13 +34,13 @@ const PrivacyPolicy = () => {
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white">1. Introduction</h2>
             <p>
-              Welcome to SipCircle ("we," "our," or "us"). We are committed to protecting your privacy 
+              Welcome to PourCircle ("we," "our," or "us"). We are committed to protecting your privacy 
               and personal information. This Privacy Policy explains how we collect, use, disclose, 
               and safeguard your information when you use our mobile application and website 
               (collectively, the "Service").
             </p>
             <p>
-              Please read this Privacy Policy carefully. By accessing or using SipCircle, you acknowledge 
+              Please read this Privacy Policy carefully. By accessing or using PourCircle, you acknowledge 
               that you have read, understood, and agree to be bound by this Privacy Policy and our{" "}
               <Link to="/terms" className="text-primary hover:underline">Terms of Use</Link>.
             </p>
@@ -49,12 +49,12 @@ const PrivacyPolicy = () => {
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white">2. Age Requirement</h2>
             <p>
-              SipCircle is intended for users who are of legal drinking age in their jurisdiction. 
+              PourCircle is intended for users who are of legal drinking age in their jurisdiction. 
               By using our Service, you represent and warrant that you are at least 21 years of age 
               in the United States, or the legal drinking age in your country of residence.
             </p>
             <p>
-              SipCircle may collect date of birth, age-related information, or age-confirmation 
+              PourCircle may collect date of birth, age-related information, or age-confirmation 
               information for the purpose of determining eligibility to use the platform, supporting 
               compliance efforts, enforcing platform restrictions, and maintaining the intended 
               age-limited nature of the service.
@@ -68,7 +68,7 @@ const PrivacyPolicy = () => {
             <h2 className="text-xl font-semibold text-white">3. Information We Collect</h2>
             <h3 className="text-lg font-medium text-white/90">3.1 Account Information</h3>
             <p>
-              SipCircle may collect information you provide when creating or maintaining an account, including:
+              PourCircle may collect information you provide when creating or maintaining an account, including:
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>Name and username</li>
@@ -90,7 +90,7 @@ const PrivacyPolicy = () => {
 
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white">4. How We Use Your Information</h2>
-            <p>SipCircle may use collected information to:</p>
+            <p>PourCircle may use collected information to:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>Operate the platform and provide features</li>
               <li>Maintain account functionality</li>
@@ -103,9 +103,9 @@ const PrivacyPolicy = () => {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">5. Public-Facing Nature of SipCircle</h2>
+            <h2 className="text-xl font-semibold text-white">5. Public-Facing Nature of PourCircle</h2>
             <p>
-              SipCircle is intended to be a public-facing discovery platform. Certain information 
+              PourCircle is intended to be a public-facing discovery platform. Certain information 
               posted by bartenders, venues, or users may be visible to other users of the platform, including:
             </p>
             <ul className="list-disc pl-6 space-y-2">
@@ -199,7 +199,7 @@ const PrivacyPolicy = () => {
               If you have any questions about this Privacy Policy or our privacy practices, 
               please contact us at:
             </p>
-            <p className="text-primary">sipcirclehelp@gmail.com</p>
+            <p className="text-primary">pourcirclehelp@gmail.com</p>
           </section>
         </div>
       </main>
@@ -209,12 +209,12 @@ const PrivacyPolicy = () => {
         <div className="max-w-3xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <Wine className="w-5 h-5 text-primary" />
-            <span className="text-white font-semibold">SipCircle</span>
+            <span className="text-white font-semibold">PourCircle</span>
           </div>
           <div className="flex gap-4">
             <Link to="/terms" className="text-white/40 hover:text-white/60 text-sm">Terms of Use</Link>
             <span className="text-white/20">|</span>
-            <span className="text-white/40 text-sm">© 2026 SipCircle. All rights reserved.</span>
+            <span className="text-white/40 text-sm">© 2026 PourCircle. All rights reserved.</span>
           </div>
         </div>
       </footer>

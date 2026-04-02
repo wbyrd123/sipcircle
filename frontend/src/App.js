@@ -18,6 +18,7 @@ import FollowersPage from "./pages/FollowersPage";
 import FollowRequestsPage from "./pages/FollowRequestsPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
+import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -29,7 +30,7 @@ export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("sipcircle_token"));
+  const [token, setToken] = useState(localStorage.getItem("pourcircle_token"));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ const AuthProvider = ({ children }) => {
           setUser(response.data);
         } catch (e) {
           console.error("Auth error:", e);
-          localStorage.removeItem("sipcircle_token");
+          localStorage.removeItem("pourcircle_token");
           setToken(null);
         }
       }
@@ -53,7 +54,7 @@ const AuthProvider = ({ children }) => {
 
   const login = async (identifier, password) => {
     const response = await axios.post(`${API}/auth/login`, { identifier, password });
-    localStorage.setItem("sipcircle_token", response.data.token);
+    localStorage.setItem("pourcircle_token", response.data.token);
     setToken(response.data.token);
     setUser(response.data.user);
     return response.data.user;
@@ -61,14 +62,14 @@ const AuthProvider = ({ children }) => {
 
   const register = async (data) => {
     const response = await axios.post(`${API}/auth/register`, data);
-    localStorage.setItem("sipcircle_token", response.data.token);
+    localStorage.setItem("pourcircle_token", response.data.token);
     setToken(response.data.token);
     setUser(response.data.user);
     return response.data.user;
   };
 
   const logout = () => {
-    localStorage.removeItem("sipcircle_token");
+    localStorage.removeItem("pourcircle_token");
     setToken(null);
     setUser(null);
   };
@@ -159,6 +160,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <div className="App min-h-screen bg-background">
+          <SmartAppBanner />
           <AppRoutes />
           <Toaster position="top-center" richColors />
         </div>

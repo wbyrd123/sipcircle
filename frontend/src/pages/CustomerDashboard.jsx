@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, API } from "../App";
 import axios from "axios";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
-  Wine, Search, Calendar, Users, MapPin, Settings, UserPlus, Loader2, Sparkles
+  Wine, Search, Calendar, Users, MapPin, Settings, UserPlus, Loader2, Sparkles, QrCode, Share2, Copy
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +19,9 @@ const CustomerDashboard = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [followingUsers, setFollowingUsers] = useState({});
+  const [showQR, setShowQR] = useState(false);
+
+  const profileUrl = `${window.location.origin}/u/${user?.username}`;
 
   useEffect(() => {
     fetchData();
@@ -86,7 +90,7 @@ const CustomerDashboard = () => {
       <header className="p-6 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Wine className="w-6 h-6 text-primary" />
-          <span className="text-xl font-bold text-white">SipCircle</span>
+          <span className="text-xl font-bold text-white">PourCircle</span>
         </div>
         <Button 
           variant="ghost" 
@@ -119,15 +123,67 @@ const CustomerDashboard = () => {
         </button>
 
         {/* Quick Actions */}
-        <button 
-          onClick={() => navigate("/invites")}
-          className="glass-card-hover p-5 text-left w-full"
-          data-testid="invites-btn"
-        >
-          <Calendar className="w-7 h-7 text-primary mb-2" />
-          <p className="text-white font-medium">Invites</p>
-          <p className="text-white/50 text-sm">Plan meetups with friends</p>
-        </button>
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => navigate("/invites")}
+            className="glass-card-hover p-5 text-left"
+            data-testid="invites-btn"
+          >
+            <Calendar className="w-7 h-7 text-primary mb-2" />
+            <p className="text-white font-medium">Invites</p>
+            <p className="text-white/50 text-sm">Plan meetups</p>
+          </button>
+          <button 
+            onClick={() => setShowQR(!showQR)}
+            className="glass-card-hover p-5 text-left"
+            data-testid="qr-btn"
+          >
+            <QrCode className="w-7 h-7 text-secondary mb-2" />
+            <p className="text-white font-medium">My QR Code</p>
+            <p className="text-white/50 text-sm">Share profile</p>
+          </button>
+        </div>
+
+        {/* QR Code Section */}
+        {showQR && (
+          <div className="glass-card p-6 animate-fade-in">
+            <div className="flex flex-col items-center">
+              <div className="qr-container mb-4">
+                <QRCodeSVG value={profileUrl} size={160} level="H" />
+              </div>
+              <p className="text-white/60 text-sm text-center mb-4">
+                Scan to view my profile
+              </p>
+              <div className="flex gap-2 w-full">
+                <Button
+                  onClick={() => {
+                    navigator.clipboard.writeText(profileUrl);
+                    toast.success("Link copied!");
+                  }}
+                  variant="outline"
+                  className="flex-1 border-white/20 text-white hover:bg-white/5"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Link
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (navigator.share) {
+                      await navigator.share({ title: `${user.name} on PourCircle`, url: profileUrl });
+                    } else {
+                      navigator.clipboard.writeText(profileUrl);
+                      toast.success("Link copied!");
+                    }
+                  }}
+                  className="flex-1 btn-primary"
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Following */}
         <div className="glass-card p-6">

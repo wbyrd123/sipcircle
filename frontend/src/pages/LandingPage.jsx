@@ -1,6 +1,6 @@
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
-import { Wine, Users, MessageCircle, MapPin, QrCode, DollarSign } from "lucide-react";
+import { Wine, Users, Calendar, MapPin, QrCode, DollarSign } from "lucide-react";
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ const LandingPage = () => {
     { icon: Users, title: "Build Your Following", desc: "Connect with regulars and grow your clientele" },
     { icon: DollarSign, title: "Easy Tips", desc: "Venmo & CashApp integration for seamless tipping" },
     { icon: MapPin, title: "Share Your Schedule", desc: "Let followers know where you're working" },
-    { icon: MessageCircle, title: "Direct Messages", desc: "Stay connected with your favorite patrons" },
+    { icon: Calendar, title: "Plan Meetups", desc: "Invite friends to your favorite spots" },
     { icon: QrCode, title: "QR Code Profile", desc: "Scannable codes for instant profile access" },
     { icon: Wine, title: "Happy Hour Updates", desc: "Share specials and drink menus" }
   ];
@@ -31,7 +31,7 @@ const LandingPage = () => {
         <header className="relative z-10 p-6 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Wine className="w-8 h-8 text-primary" />
-            <span className="text-2xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>SipCircle</span>
+            <span className="text-2xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>PourCircle</span>
           </div>
           <Button 
             onClick={() => navigate("/auth")} 
@@ -129,13 +129,13 @@ const LandingPage = () => {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <Wine className="w-6 h-6 text-primary" />
-            <span className="text-white font-semibold">SipCircle</span>
+            <span className="text-white font-semibold">PourCircle</span>
           </div>
           <div className="flex items-center gap-6">
             <Link to="/privacy" className="text-white/40 text-sm hover:text-white/60 transition-colors">
               Privacy Policy
             </Link>
-            <p className="text-white/40 text-sm">© 2025 SipCircle. Drink responsibly.</p>
+            <p className="text-white/40 text-sm">© 2026 PourCircle. Drink responsibly.</p>
           </div>
         </div>
       </footer>
