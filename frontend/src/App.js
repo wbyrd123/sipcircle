@@ -18,6 +18,7 @@ import FollowersPage from "./pages/FollowersPage";
 import FollowRequestsPage from "./pages/FollowRequestsPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
+import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -159,6 +160,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <div className="App min-h-screen bg-background">
+          <SmartAppBanner />
           <AppRoutes />
           <Toaster position="top-center" richColors />
         </div>
