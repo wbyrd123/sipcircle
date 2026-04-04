@@ -585,6 +585,41 @@ async def get_blocked_users(user: dict = Depends(get_current_user)):
     blocked = await db.users.find({"id": {"$in": blocked_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return blocked
 
+# ===================== REPORTING =====================
+class ReportCreate(BaseModel):
+    reason: str
+    details: Optional[str] = None
+
+@api_router.post("/report/{user_id}")
+async def report_user(user_id: str, report: ReportCreate, user: dict = Depends(get_current_user)):
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot report yourself")
+    
+    reported_user = await db.users.find_one({"id": user_id})
+    if not reported_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    report_entry = {
+        "id": str(uuid.uuid4()),
+        "reporter_id": user["id"],
+        "reporter_username": user.get("username"),
+        "reported_user_id": user_id,
+        "reported_username": reported_user.get("username"),
+        "reason": report.reason,
+        "details": report.details,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.reports.insert_one(report_entry)
+    return {"success": True, "message": "Report submitted. Thank you for helping keep PourCircle safe."}
+
+@api_router.get("/reports")
+async def get_reports(user: dict = Depends(get_current_user)):
+    # Only allow admins to view reports (for now, just return empty for regular users)
+    # In production, you'd check for admin role
+    return []
+
 # ===================== MESSAGING =====================
 @api_router.post("/messages")
 async def send_message(msg: MessageCreate, user: dict = Depends(get_current_user)):

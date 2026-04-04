@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
   MapPin, Clock, Users, QrCode, DollarSign, 
-  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine, ShieldBan
+  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine, ShieldBan, Flag
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +21,10 @@ const UserProfile = () => {
   const [showQR, setShowQR] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
 
   const profileUrl = `${window.location.origin}/u/${username}`;
 
@@ -103,6 +107,28 @@ const UserProfile = () => {
       toast.error("Failed to block user");
     } finally {
       setBlockLoading(false);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!reportReason) {
+      toast.error("Please select a reason");
+      return;
+    }
+    setReportLoading(true);
+    try {
+      await axios.post(`${API}/report/${profile.id}`, 
+        { reason: reportReason, details: reportDetails },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Report submitted. Thank you for helping keep PourCircle safe.");
+      setShowReportModal(false);
+      setReportReason("");
+      setReportDetails("");
+    } catch (e) {
+      toast.error("Failed to submit report");
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -238,6 +264,18 @@ const UserProfile = () => {
               ) : (
                 <ShieldBan className="w-4 h-4" />
               )}
+            </Button>
+          )}
+          {user && !isOwnProfile && (
+            <Button 
+              onClick={() => setShowReportModal(true)}
+              size="sm"
+              variant="ghost"
+              className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10"
+              data-testid="report-btn"
+              title="Report user"
+            >
+              <Flag className="w-4 h-4" />
             </Button>
           )}
         </div>
@@ -420,6 +458,63 @@ const UserProfile = () => {
       </main>
 
       {user && <BottomNav />}
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-md border border-white/10">
+            <h3 className="text-xl font-bold text-white mb-4">Report User</h3>
+            <p className="text-white/60 text-sm mb-4">
+              Why are you reporting @{profile.username}?
+            </p>
+            
+            <div className="space-y-2 mb-4">
+              {["Harassment or bullying", "Spam or fake profile", "Inappropriate content", "Impersonation", "Other"].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setReportReason(reason)}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    reportReason === reason 
+                      ? "border-primary bg-primary/10 text-white" 
+                      : "border-white/10 text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              placeholder="Additional details (optional)"
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 mb-4 resize-none"
+              rows={3}
+            />
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportReason("");
+                  setReportDetails("");
+                }}
+                variant="outline"
+                className="flex-1 border-white/20 text-white"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReport}
+                disabled={reportLoading || !reportReason}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit Report"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
