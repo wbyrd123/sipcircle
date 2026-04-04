@@ -1,5 +1,17 @@
 # Test Credentials
 
+## Demo Accounts for App Store Reviews
+
+### Apple App Store Reviewer
+- **Username:** `applereview`
+- **Password:** `AppleReview2026!`
+- **Role:** Bar-goer (customer)
+
+### Google Play Reviewer
+- **Username:** `googlereview`
+- **Password:** `GoogleReview2026!`
+- **Role:** Bar-goer (customer)
+
 ## Test Accounts
 These are dynamically created during testing. Use password `Test123!` for all test accounts.
 

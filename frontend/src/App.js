@@ -128,7 +128,7 @@ const AppRoutes = () => {
       
       {/* Bartender Routes */}
       <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["bartender"]}><BartenderDashboard /></ProtectedRoute>} />
-      <Route path="/followers" element={<ProtectedRoute allowedRoles={["bartender"]}><FollowersPage /></ProtectedRoute>} />
+      <Route path="/followers" element={<ProtectedRoute allowedRoles={["bartender", "customer"]}><FollowersPage /></ProtectedRoute>} />
       
       {/* Customer Routes */}
       <Route path="/home" element={<ProtectedRoute allowedRoles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />

@@ -625,6 +625,17 @@ const EditProfile = () => {
           </>
         )}
 
+        {/* Blocked Users */}
+        <Button 
+          onClick={() => navigate("/followers")}
+          variant="outline"
+          className="w-full border-white/20 text-white/70 hover:bg-white/5"
+          data-testid="blocked-users-btn"
+        >
+          <Shield className="w-4 h-4 mr-2" />
+          Manage Blocked Users
+        </Button>
+
         {/* Logout */}
         <Button 
           onClick={handleLogout}

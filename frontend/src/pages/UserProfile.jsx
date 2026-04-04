@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
   MapPin, Clock, Users, QrCode, DollarSign, 
-  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine
+  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine, ShieldBan
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
 
   const profileUrl = `${window.location.origin}/u/${username}`;
 
@@ -85,6 +86,23 @@ const UserProfile = () => {
     } else {
       navigator.clipboard.writeText(profileUrl);
       toast.success("Link copied!");
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    setBlockLoading(true);
+    try {
+      await axios.post(`${API}/block/${profile.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("User blocked");
+      navigate(-1);
+    } catch (e) {
+      toast.error("Failed to block user");
+    } finally {
+      setBlockLoading(false);
     }
   };
 
@@ -202,6 +220,23 @@ const UserProfile = () => {
                 <>Requested</>
               ) : (
                 <><UserPlus className="w-4 h-4 mr-1" /> Follow</>
+              )}
+            </Button>
+          )}
+          {user && !isOwnProfile && (
+            <Button 
+              onClick={handleBlock}
+              disabled={blockLoading}
+              size="sm"
+              variant="ghost"
+              className="text-red-400 hover:text-red-300 hover:bg-red-400/10 ml-2"
+              data-testid="block-btn"
+              title="Block user"
+            >
+              {blockLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ShieldBan className="w-4 h-4" />
               )}
             </Button>
           )}
