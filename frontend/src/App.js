@@ -19,6 +19,7 @@ import FollowRequestsPage from "./pages/FollowRequestsPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
 import DeleteAccountPage from "./pages/DeleteAccountPage";
+import SafetyStandardsPage from "./pages/SafetyStandardsPage";
 import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -150,6 +151,7 @@ const AppRoutes = () => {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfUse />} />
       <Route path="/delete-account" element={<DeleteAccountPage />} />
+      <Route path="/safety" element={<SafetyStandardsPage />} />
       
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" />} />
