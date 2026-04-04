@@ -55,7 +55,14 @@ const AuthPage = () => {
       toast.success(`Welcome to PourCircle, ${user.name}!`);
       navigate(user.role === "bartender" ? "/dashboard" : "/home");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Registration failed");
+      if (e.response?.data?.detail) {
+        toast.error(e.response.data.detail);
+      } else if (e.code === 'ERR_NETWORK' || !navigator.onLine) {
+        toast.error("Network error. Please check your internet connection and try again.");
+      } else {
+        toast.error("Registration failed. Please try again.");
+      }
+      console.error("Registration error:", e);
     } finally {
       setLoading(false);
     }
