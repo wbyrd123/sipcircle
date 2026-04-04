@@ -563,8 +563,9 @@ async def get_people_you_may_know(user: dict = Depends(get_current_user)):
 # ===================== BLOCK SYSTEM =====================
 @api_router.post("/block/{user_id}")
 async def block_user(user_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] != UserRole.BARTENDER:
-        raise HTTPException(status_code=403, detail="Only bartenders can block users")
+    # All users (bartenders and bar-goers) can block other users
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
     
     await db.users.update_one({"id": user["id"]}, {"$addToSet": {"blocked_users": user_id}})
     # Also remove from followers
