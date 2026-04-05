@@ -789,28 +789,6 @@ async def delete_account(user: dict = Depends(get_current_user)):
     
     return {"success": True, "message": "Account deleted"}
 
-# Include router and middleware
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def startup():
-    # Initialize storage
-    init_storage()
-    # Create indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("username", unique=True)
-    await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
-    await db.invites.create_index("creator_id")
-    logger.info("SipCircle API started")
-
 # ===================== ADMIN ENDPOINTS =====================
 ADMIN_USERNAMES = ["wbyrd123"]  # Add admin usernames here
 
@@ -845,6 +823,28 @@ async def admin_delete_user(user_id: str, admin: dict = Depends(get_admin_user))
 async def admin_get_reports(admin: dict = Depends(get_admin_user)):
     reports = await db.reports.find({}, {"_id": 0}).to_list(1000)
     return reports
+
+# Include router and middleware
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def startup():
+    # Initialize storage
+    init_storage()
+    # Create indexes
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("username", unique=True)
+    await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
+    await db.invites.create_index("creator_id")
+    logger.info("SipCircle API started")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
