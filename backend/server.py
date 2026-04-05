@@ -231,19 +231,22 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login", response_model=AuthResponse)
 async def login(req: LoginRequest):
-    # Check if identifier is email or username
+    # Check if identifier is email or username (case-insensitive)
     identifier = req.identifier.lower().strip()
     
-    # Try to find by email first, then by username
+    # Try to find by email first, then by username (case-insensitive)
     if "@" in identifier:
-        user = await db.users.find_one({"email": identifier}, {"_id": 0})
+        user = await db.users.find_one({"email": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
     else:
-        user = await db.users.find_one({"username": identifier}, {"_id": 0})
+        user = await db.users.find_one({"username": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
     
     # If not found by the assumed type, try the other
     if not user:
         user = await db.users.find_one(
-            {"$or": [{"email": identifier}, {"username": identifier}]}, 
+            {"$or": [
+                {"email": {"$regex": f"^{identifier}$", "$options": "i"}}, 
+                {"username": {"$regex": f"^{identifier}$", "$options": "i"}}
+            ]}, 
             {"_id": 0}
         )
     
