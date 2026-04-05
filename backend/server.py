@@ -811,6 +811,41 @@ async def startup():
     await db.invites.create_index("creator_id")
     logger.info("SipCircle API started")
 
+# ===================== ADMIN ENDPOINTS =====================
+ADMIN_USERNAMES = ["wbyrd123"]  # Add admin usernames here
+
+async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user = await get_current_user(credentials)
+    if user.get("username") not in ADMIN_USERNAMES:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+@api_router.get("/admin/users")
+async def admin_get_users(admin: dict = Depends(get_admin_user)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return users
+
+@api_router.get("/admin/users/{user_id}")
+async def admin_get_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "message": "User deleted"}
+
+@api_router.get("/admin/reports")
+async def admin_get_reports(admin: dict = Depends(get_admin_user)):
+    reports = await db.reports.find({}, {"_id": 0}).to_list(1000)
+    return reports
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
