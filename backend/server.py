@@ -4,6 +4,8 @@ from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from contextlib import asynccontextmanager
+import asyncio
 import os
 import logging
 from pathlib import Path
@@ -18,10 +20,122 @@ import requests
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection with health tracking
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db_name = os.environ['DB_NAME']
+client = None
+db = None
+db_healthy = False
+last_health_check = None
+health_check_interval = 30  # seconds
+
+async def init_mongodb():
+    """Initialize MongoDB connection with proper settings"""
+    global client, db, db_healthy
+    try:
+        client = AsyncIOMotorClient(
+            mongo_url,
+            serverSelectionTimeoutMS=5000,  # 5 second timeout for server selection
+            connectTimeoutMS=5000,           # 5 second connection timeout
+            socketTimeoutMS=10000,           # 10 second socket timeout
+            maxPoolSize=50,                  # Connection pool size
+            minPoolSize=5,                   # Minimum connections to keep
+            maxIdleTimeMS=60000,             # Close idle connections after 60 seconds
+            retryWrites=True,                # Retry failed writes
+            retryReads=True,                 # Retry failed reads
+        )
+        db = client[db_name]
+        # Test the connection
+        await client.admin.command('ping')
+        db_healthy = True
+        logger.info("MongoDB connection initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"MongoDB initialization failed: {e}")
+        db_healthy = False
+        return False
+
+async def check_db_health():
+    """Check if MongoDB connection is healthy"""
+    global db_healthy, last_health_check
+    try:
+        # Ping the database
+        await client.admin.command('ping')
+        # Also do a quick read test
+        await db.users.find_one({}, {"_id": 1})
+        db_healthy = True
+        last_health_check = datetime.now(timezone.utc)
+        return True
+    except Exception as e:
+        logger.error(f"MongoDB health check failed: {e}")
+        db_healthy = False
+        return False
+
+async def reconnect_mongodb():
+    """Attempt to reconnect to MongoDB"""
+    global client, db, db_healthy
+    logger.warning("Attempting MongoDB reconnection...")
+    try:
+        if client:
+            client.close()
+    except:
+        pass
+    return await init_mongodb()
+
+async def health_monitor():
+    """Background task to monitor database health"""
+    global db_healthy
+    while True:
+        try:
+            await asyncio.sleep(health_check_interval)
+            is_healthy = await check_db_health()
+            if not is_healthy:
+                logger.warning("Database unhealthy, attempting reconnection...")
+                reconnected = await reconnect_mongodb()
+                if reconnected:
+                    logger.info("MongoDB reconnection successful")
+                else:
+                    logger.error("MongoDB reconnection failed")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Health monitor error: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifecycle - startup and shutdown"""
+    # Startup
+    logger.info("Starting SipCircle API...")
+    await init_mongodb()
+    init_storage()
+    
+    # Create indexes
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("username", unique=True)
+        await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
+        await db.invites.create_index("creator_id")
+        logger.info("Database indexes created")
+    except Exception as e:
+        logger.warning(f"Index creation warning (may already exist): {e}")
+    
+    # Start background health monitor
+    health_task = asyncio.create_task(health_monitor())
+    logger.info("Background health monitor started (checks every 30 seconds)")
+    logger.info("SipCircle API started successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down SipCircle API...")
+    health_task.cancel()
+    try:
+        await health_task
+    except asyncio.CancelledError:
+        pass
+    if client:
+        client.close()
+    logger.info("MongoDB connection closed")
 
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'sipcircle-secret-key-change-in-production')
@@ -34,8 +148,8 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 APP_NAME = "sipcircle"
 storage_key = None
 
-# Create the main app
-app = FastAPI(title="SipCircle API")
+# Create the main app with lifespan management
+app = FastAPI(title="SipCircle API", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -765,7 +879,64 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    return {"status": "healthy", "storage": storage_key is not None}
+    """Basic health check - returns quickly"""
+    return {
+        "status": "healthy" if db_healthy else "degraded",
+        "storage": storage_key is not None,
+        "database": db_healthy
+    }
+
+@api_router.get("/health/detailed")
+async def health_detailed():
+    """Detailed health check - performs actual connectivity tests"""
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": {}
+    }
+    
+    # Check MongoDB
+    try:
+        start = datetime.now(timezone.utc)
+        await client.admin.command('ping')
+        # Test read operation
+        await db.users.find_one({}, {"_id": 1})
+        latency_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        health_status["checks"]["mongodb"] = {
+            "status": "healthy",
+            "latency_ms": round(latency_ms, 2),
+            "last_check": last_health_check.isoformat() if last_health_check else None
+        }
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["mongodb"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        logger.error(f"Health check - MongoDB unhealthy: {e}")
+    
+    # Check Storage
+    health_status["checks"]["storage"] = {
+        "status": "healthy" if storage_key else "unavailable",
+        "initialized": storage_key is not None
+    }
+    
+    # Overall status
+    if health_status["checks"]["mongodb"].get("status") != "healthy":
+        health_status["status"] = "unhealthy"
+    
+    return health_status
+
+@api_router.post("/health/reconnect")
+async def force_reconnect():
+    """Force a database reconnection - for admin use"""
+    logger.warning("Manual database reconnection requested")
+    success = await reconnect_mongodb()
+    return {
+        "success": success,
+        "database_healthy": db_healthy,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # ===================== DELETE ACCOUNT =====================
 @api_router.delete("/account")
@@ -849,17 +1020,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup():
-    # Initialize storage
-    init_storage()
-    # Create indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("username", unique=True)
-    await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
-    await db.invites.create_index("creator_id")
-    logger.info("SipCircle API started")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Old startup/shutdown events removed - now using lifespan context manager
