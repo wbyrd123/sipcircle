@@ -16,6 +16,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from "../components/ui/alert-dialog";
+import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 
 const EditProfile = () => {
   const navigate = useNavigate();
@@ -37,7 +39,79 @@ const EditProfile = () => {
   const [requireFollowApproval, setRequireFollowApproval] = useState(user?.require_follow_approval || false);
 
   const isBartender = user?.role === "bartender";
+  const isNativePlatform = Capacitor.isNativePlatform();
 
+  // Convert base64 to Blob for upload
+  const base64ToBlob = (base64, mimeType) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  };
+
+  // Native camera/photo picker using Capacitor Camera plugin
+  const handleNativeImagePick = async () => {
+    try {
+      // Request permissions first
+      const permissions = await CapacitorCamera.checkPermissions();
+      if (permissions.photos === 'denied' || permissions.camera === 'denied') {
+        const requested = await CapacitorCamera.requestPermissions();
+        if (requested.photos === 'denied' && requested.camera === 'denied') {
+          toast.error("Camera and photo library access is required to upload a profile picture");
+          return;
+        }
+      }
+
+      // Show action sheet to choose camera or gallery
+      const image = await CapacitorCamera.getPhoto({
+        quality: 80,
+        allowEditing: true,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Prompt, // Shows action sheet: Camera, Photos, or Cancel
+        width: 500,
+        height: 500,
+        correctOrientation: true,
+        presentationStyle: 'popover', // Important for iPad - prevents crash
+      });
+
+      if (!image.base64String) {
+        return;
+      }
+
+      setUploading(true);
+
+      // Convert base64 to blob
+      const mimeType = `image/${image.format || 'jpeg'}`;
+      const blob = base64ToBlob(image.base64String, mimeType);
+      const file = new File([blob], `profile.${image.format || 'jpg'}`, { type: mimeType });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await axios.post(`${API}/profile/image`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
+      });
+      updateUser({ profile_image: response.data.path });
+      toast.success("Profile picture updated!");
+    } catch (e) {
+      // User cancelled - don't show error
+      if (e.message?.includes('cancelled') || e.message?.includes('User cancelled')) {
+        return;
+      }
+      console.error("Image pick error:", e);
+      toast.error("Failed to upload image. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Web file input handler (fallback for browsers)
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -64,6 +138,15 @@ const EditProfile = () => {
       toast.error("Failed to upload image");
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Unified image picker - uses native on iOS/Android, file input on web
+  const handleImagePick = () => {
+    if (isNativePlatform) {
+      handleNativeImagePick();
+    } else {
+      fileInputRef.current?.click();
     }
   };
 
@@ -272,13 +355,14 @@ const EditProfile = () => {
               </AvatarFallback>
             </Avatar>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handleImagePick}
               disabled={uploading}
               className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-black hover:bg-primary/90 transition-colors"
               data-testid="upload-photo-btn"
             >
               <Camera className="w-5 h-5" />
             </button>
+            {/* File input fallback for web browsers */}
             <input
               ref={fileInputRef}
               type="file"

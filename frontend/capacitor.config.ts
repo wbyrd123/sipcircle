@@ -25,6 +25,10 @@ const config: CapacitorConfig = {
       style: 'dark',
       backgroundColor: '#050505',
     },
+    Camera: {
+      // iOS specific settings
+      presentationStyle: 'popover', // Required for iPad to prevent crashes
+    },
   },
   ios: {
     contentInset: 'automatic',
