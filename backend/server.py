@@ -231,8 +231,12 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login", response_model=AuthResponse)
 async def login(req: LoginRequest):
+    # Log raw request data for debugging
+    logger.info(f"Login attempt - raw identifier: '{req.identifier}', password length: {len(req.password) if req.password else 0}")
+    
     # Check if identifier is email or username (case-insensitive)
     identifier = req.identifier.lower().strip()
+    logger.info(f"Login attempt for identifier: '{identifier}'")
     
     # Try to find by email first, then by username (case-insensitive)
     if "@" in identifier:
@@ -250,8 +254,15 @@ async def login(req: LoginRequest):
             {"_id": 0}
         )
     
-    if not user or not verify_password(req.password, user["password_hash"]):
+    if not user:
+        logger.warning(f"Login failed: User not found for identifier '{identifier}'")
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not verify_password(req.password, user["password_hash"]):
+        logger.warning(f"Login failed: Invalid password for user '{user.get('username')}'")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    logger.info(f"Login successful for user: {user.get('username')}")
     
     user_response = {k: v for k, v in user.items() if k != "password_hash"}
     token = create_token(user["id"])
