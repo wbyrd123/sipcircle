@@ -27,7 +27,7 @@ client = None
 db = None
 db_healthy = False
 last_health_check = None
-health_check_interval = 30  # seconds
+health_check_interval = 15  # seconds - check every 15 seconds for faster detection
 
 async def init_mongodb():
     """Initialize MongoDB connection with proper settings"""
@@ -82,6 +82,32 @@ async def reconnect_mongodb():
         pass
     return await init_mongodb()
 
+async def db_operation_with_retry(operation, max_retries=2):
+    """Execute a database operation with automatic retry and reconnection on failure"""
+    global db_healthy
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            result = await operation()
+            return result
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Database operation failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+            
+            if attempt < max_retries:
+                # Try to reconnect
+                logger.info("Attempting automatic reconnection...")
+                reconnected = await reconnect_mongodb()
+                if reconnected:
+                    logger.info("Reconnection successful, retrying operation...")
+                else:
+                    logger.error("Reconnection failed")
+            
+    # All retries exhausted
+    logger.error(f"Database operation failed after {max_retries + 1} attempts: {last_error}")
+    raise last_error
+
 async def health_monitor():
     """Background task to monitor database health"""
     global db_healthy
@@ -121,7 +147,7 @@ async def lifespan(app: FastAPI):
     
     # Start background health monitor
     health_task = asyncio.create_task(health_monitor())
-    logger.info("Background health monitor started (checks every 30 seconds)")
+    logger.info(f"Background health monitor started (checks every {health_check_interval} seconds)")
     logger.info("SipCircle API started successfully")
     
     yield
@@ -352,21 +378,29 @@ async def login(req: LoginRequest):
     identifier = req.identifier.lower().strip()
     logger.info(f"Login attempt for identifier: '{identifier}'")
     
-    # Try to find by email first, then by username (case-insensitive)
-    if "@" in identifier:
-        user = await db.users.find_one({"email": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
-    else:
-        user = await db.users.find_one({"username": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
+    async def find_user():
+        # Try to find by email first, then by username (case-insensitive)
+        if "@" in identifier:
+            user = await db.users.find_one({"email": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
+        else:
+            user = await db.users.find_one({"username": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
+        
+        # If not found by the assumed type, try the other
+        if not user:
+            user = await db.users.find_one(
+                {"$or": [
+                    {"email": {"$regex": f"^{identifier}$", "$options": "i"}}, 
+                    {"username": {"$regex": f"^{identifier}$", "$options": "i"}}
+                ]}, 
+                {"_id": 0}
+            )
+        return user
     
-    # If not found by the assumed type, try the other
-    if not user:
-        user = await db.users.find_one(
-            {"$or": [
-                {"email": {"$regex": f"^{identifier}$", "$options": "i"}}, 
-                {"username": {"$regex": f"^{identifier}$", "$options": "i"}}
-            ]}, 
-            {"_id": 0}
-        )
+    try:
+        user = await db_operation_with_retry(find_user)
+    except Exception as e:
+        logger.error(f"Database error during login: {e}")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable. Please try again.")
     
     if not user:
         logger.warning(f"Login failed: User not found for identifier '{identifier}'")
