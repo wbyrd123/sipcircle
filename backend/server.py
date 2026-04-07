@@ -39,10 +39,11 @@ async def init_mongodb():
             connectTimeoutMS=5000,           # 5 second connection timeout
             socketTimeoutMS=10000,           # 10 second socket timeout
             maxPoolSize=50,                  # Connection pool size
-            minPoolSize=5,                   # Minimum connections to keep
-            maxIdleTimeMS=60000,             # Close idle connections after 60 seconds
+            minPoolSize=10,                  # Keep more minimum connections alive
+            maxIdleTimeMS=30000,             # Close idle connections after 30 seconds (was 60)
             retryWrites=True,                # Retry failed writes
             retryReads=True,                 # Retry failed reads
+            heartbeatFrequencyMS=10000,      # Check server health every 10 seconds
         )
         db = client[db_name]
         # Test the connection
@@ -371,6 +372,13 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login", response_model=AuthResponse)
 async def login(req: LoginRequest):
+    # Ensure database connection is fresh before login attempt
+    try:
+        await client.admin.command('ping')
+    except Exception as e:
+        logger.warning(f"Pre-login ping failed, reconnecting: {e}")
+        await reconnect_mongodb()
+    
     # Log raw request data for debugging
     logger.info(f"Login attempt - raw identifier: '{req.identifier}', password length: {len(req.password) if req.password else 0}")
     
