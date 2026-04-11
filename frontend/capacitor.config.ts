@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.pourcircle.app',
+  appId: 'com.pourcircle.wb',
   appName: 'SipCircle',
   webDir: 'build',
   server: {
