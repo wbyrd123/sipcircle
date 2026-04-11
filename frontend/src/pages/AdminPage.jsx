@@ -4,7 +4,7 @@ import { useAuth, API } from "../App";
 import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { ArrowLeft, Trash2, Users, Flag, Search, Shield, RefreshCw } from "lucide-react";
+import { ArrowLeft, Trash2, Users, Flag, Search, Shield, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 
 const AdminPage = () => {
@@ -53,6 +53,31 @@ const AdminPage = () => {
       toast.error(e.response?.data?.detail || "Failed to delete user");
     }
   };
+
+  const handlePromoteUser = async (userId, username) => {
+    try {
+      await axios.post(`${API}/admin/users/${userId}/promote`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(`@${username} is now an admin`);
+      setUsers(users.map(u => u.id === userId ? { ...u, is_admin: true } : u));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to promote user");
+    }
+  };
+
+  const handleDemoteUser = async (userId, username) => {
+    if (!confirm(`Remove admin access from @${username}?`)) {
+      return;
+    }
+    try {
+      await axios.post(`${API}/admin/users/${userId}/demote`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(`@${username} is no longer an admin`);
+      setUsers(users.map(u => u.id === userId ? { ...u, is_admin: false } : u));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to demote user");
+    }
+  };
+
+  const isUserAdmin = (u) => u.is_admin || u.is_master_admin;
 
   const filteredUsers = users.filter(u => 
     u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,25 +186,60 @@ const AdminPage = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-white font-medium">{u.name || "No name"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-white font-medium">{u.name || "No name"}</p>
+                        {isUserAdmin(u) && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full">
+                            <Shield className="w-3 h-3" />
+                            {u.is_master_admin ? "Master" : "Admin"}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-white/60 text-sm">@{u.username}</p>
                       <p className="text-white/40 text-xs">{u.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-end gap-2">
                     <span className={`px-2 py-1 rounded-full text-xs ${
                       u.role === "bartender" ? "bg-primary/20 text-primary" : "bg-secondary/20 text-secondary"
                     }`}>
                       {u.role}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteUser(u.id, u.username)}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {!u.is_master_admin && (
+                        isUserAdmin(u) ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDemoteUser(u.id, u.username)}
+                            className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10"
+                            title="Remove admin access"
+                          >
+                            <ShieldOff className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handlePromoteUser(u.id, u.username)}
+                            className="text-green-400 hover:text-green-300 hover:bg-green-400/10"
+                            title="Make admin"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </Button>
+                        )
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteUser(u.id, u.username)}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                        title="Delete user"
+                        disabled={u.is_master_admin}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-4 text-xs text-white/40">

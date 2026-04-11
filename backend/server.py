@@ -1017,17 +1017,23 @@ async def delete_account(user: dict = Depends(get_current_user)):
     return {"success": True, "message": "Account deleted"}
 
 # ===================== ADMIN ENDPOINTS =====================
-ADMIN_USERNAMES = ["wbyrd123"]  # Add admin usernames here
+MASTER_ADMIN_USERNAMES = ["wbyrd123"]  # Master admins - cannot be revoked
 
 async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     user = await get_current_user(credentials)
-    if user.get("username") not in ADMIN_USERNAMES:
+    # Check if user is master admin or has is_admin flag
+    is_master = user.get("username") in MASTER_ADMIN_USERNAMES
+    is_db_admin = user.get("is_admin", False)
+    if not is_master and not is_db_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 @api_router.get("/admin/users")
 async def admin_get_users(admin: dict = Depends(get_admin_user)):
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    # Add is_master_admin flag for frontend
+    for user in users:
+        user["is_master_admin"] = user.get("username") in MASTER_ADMIN_USERNAMES
     return users
 
 @api_router.get("/admin/users/{user_id}")
@@ -1035,7 +1041,38 @@ async def admin_get_user(user_id: str, admin: dict = Depends(get_admin_user)):
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    user["is_master_admin"] = user.get("username") in MASTER_ADMIN_USERNAMES
     return user
+
+@api_router.post("/admin/users/{user_id}/promote")
+async def admin_promote_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Promote a user to admin"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.update_one({"id": user_id}, {"$set": {"is_admin": True}})
+    logger.info(f"User {target_user.get('username')} promoted to admin by {admin.get('username')}")
+    return {"success": True, "message": f"@{target_user.get('username')} is now an admin"}
+
+@api_router.post("/admin/users/{user_id}/demote")
+async def admin_demote_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Remove admin access from a user"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot demote master admins
+    if target_user.get("username") in MASTER_ADMIN_USERNAMES:
+        raise HTTPException(status_code=400, detail="Cannot demote master admin")
+    
+    # Cannot demote yourself
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot demote yourself")
+    
+    await db.users.update_one({"id": user_id}, {"$set": {"is_admin": False}})
+    logger.info(f"User {target_user.get('username')} demoted from admin by {admin.get('username')}")
+    return {"success": True, "message": f"@{target_user.get('username')} is no longer an admin"}
 
 @api_router.delete("/admin/users/{user_id}")
 async def admin_delete_user(user_id: str, admin: dict = Depends(get_admin_user)):
