@@ -16,7 +16,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from "../components/ui/alert-dialog";
-import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 
 const EditProfile = () => {
@@ -52,9 +51,12 @@ const EditProfile = () => {
     return new Blob([byteArray], { type: mimeType });
   };
 
-  // Native camera/photo picker using Capacitor Camera plugin
+  // Native camera/photo picker using Capacitor Camera plugin with safe dynamic import
   const handleNativeImagePick = async () => {
     try {
+      // Dynamically import to avoid crashes if plugin not properly installed
+      const { Camera: CapacitorCamera, CameraResultType, CameraSource } = await import('@capacitor/camera');
+      
       // Request permissions first
       const permissions = await CapacitorCamera.checkPermissions();
       if (permissions.photos === 'denied' || permissions.camera === 'denied') {
@@ -105,7 +107,9 @@ const EditProfile = () => {
         return;
       }
       console.error("Image pick error:", e);
-      toast.error("Failed to upload image. Please try again.");
+      // Fall back to file input on any error
+      toast.error("Camera not available. Please use the file picker.");
+      fileInputRef.current?.click();
     } finally {
       setUploading(false);
     }
