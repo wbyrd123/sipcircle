@@ -167,7 +167,7 @@ async def lifespan(app: FastAPI):
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'sipcircle-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 168  # 7 days - users stay logged in for a week
+JWT_EXPIRATION_HOURS = 480  # 20 days - users stay logged in longer
 
 # Object Storage Config
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
