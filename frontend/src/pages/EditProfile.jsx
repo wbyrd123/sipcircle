@@ -9,8 +9,9 @@ import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Switch } from "../components/ui/switch";
 import { 
-  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -723,6 +724,38 @@ const EditProfile = () => {
           <Shield className="w-4 h-4 mr-2" />
           Manage Blocked Users
         </Button>
+
+        {/* Legal & Policies */}
+        <div className="glass-card p-6 space-y-3">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" />
+            Legal & Policies
+          </h2>
+          <Link 
+            to="/privacy" 
+            className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+            data-testid="privacy-policy-link"
+          >
+            <ScrollText className="w-5 h-5 text-white/60" />
+            <span className="text-white/80">Privacy Policy</span>
+          </Link>
+          <Link 
+            to="/terms" 
+            className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+            data-testid="terms-of-use-link"
+          >
+            <FileText className="w-5 h-5 text-white/60" />
+            <span className="text-white/80">Terms of Use</span>
+          </Link>
+          <Link 
+            to="/safety" 
+            className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+            data-testid="safety-standards-link"
+          >
+            <ShieldCheck className="w-5 h-5 text-white/60" />
+            <span className="text-white/80">Safety Standards</span>
+          </Link>
+        </div>
 
         {/* Logout */}
         <Button 
