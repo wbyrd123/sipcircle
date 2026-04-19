@@ -16,6 +16,9 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import requests
+import secrets
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -175,6 +178,82 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 APP_NAME = "sipcircle"
 storage_key = None
 
+# SendGrid Config
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "admin@pourcircle.net")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://craft-scene.preview.emergentagent.com")
+
+def send_password_reset_email(to_email: str, reset_token: str, user_name: str):
+    """Send password reset email via SendGrid"""
+    if not SENDGRID_API_KEY:
+        logger.error("SendGrid API key not configured")
+        raise HTTPException(status_code=503, detail="Email service not configured")
+    
+    reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #0a0a0a; color: #ffffff; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background-color: #1a1a1a; border-radius: 12px; padding: 40px; }}
+            .logo {{ text-align: center; margin-bottom: 30px; }}
+            .logo h1 {{ color: #d4af37; font-size: 28px; margin: 0; }}
+            h2 {{ color: #ffffff; margin-bottom: 20px; }}
+            p {{ color: #cccccc; line-height: 1.6; }}
+            .button {{ display: inline-block; background-color: #d4af37; color: #000000; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }}
+            .button:hover {{ background-color: #b8962e; }}
+            .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; color: #888; font-size: 12px; }}
+            .warning {{ background-color: #2a2a2a; padding: 15px; border-radius: 8px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">
+                <h1>🍸 PourCircle</h1>
+            </div>
+            <h2>Reset Your Password</h2>
+            <p>Hi {user_name},</p>
+            <p>We received a request to reset your password for your PourCircle account. Click the button below to create a new password:</p>
+            <p style="text-align: center;">
+                <a href="{reset_link}" class="button">Reset Password</a>
+            </p>
+            <div class="warning">
+                <p><strong>Important:</strong></p>
+                <ul style="color: #cccccc;">
+                    <li>This link will expire in 1 hour</li>
+                    <li>If you didn't request this, you can safely ignore this email</li>
+                    <li>Your password won't change until you create a new one</li>
+                </ul>
+            </div>
+            <p>If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #d4af37; font-size: 12px;">{reset_link}</p>
+            <div class="footer">
+                <p>This email was sent by PourCircle. If you have any questions, contact us at support@pourcircle.net</p>
+                <p>© 2026 PourCircle. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    message = Mail(
+        from_email=SENDER_EMAIL,
+        to_emails=to_email,
+        subject="Reset Your PourCircle Password",
+        html_content=html_content
+    )
+    
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        logger.info(f"Password reset email sent to {to_email}, status: {response.status_code}")
+        return response.status_code == 202
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {e}")
+        raise HTTPException(status_code=503, detail="Failed to send email")
+
 # Create the main app with lifespan management
 app = FastAPI(title="SipCircle API", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
@@ -237,6 +316,13 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     identifier: str  # Can be email or username
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 class AuthResponse(BaseModel):
     token: str
@@ -427,6 +513,92 @@ async def login(req: LoginRequest):
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
     return {k: v for k, v in user.items() if k != "password_hash"}
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    """Send password reset email"""
+    # Find user by email (case-insensitive)
+    user = await db.users.find_one(
+        {"email": {"$regex": f"^{req.email}$", "$options": "i"}}, 
+        {"_id": 0}
+    )
+    
+    # Always return success to prevent email enumeration attacks
+    if not user:
+        logger.info(f"Password reset requested for non-existent email: {req.email}")
+        return {"message": "If an account exists with this email, you will receive a password reset link."}
+    
+    # Generate secure reset token
+    reset_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store reset token in database
+    await db.password_resets.delete_many({"user_id": user["id"]})  # Remove old tokens
+    await db.password_resets.insert_one({
+        "user_id": user["id"],
+        "token": reset_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Send email
+    try:
+        send_password_reset_email(user["email"], reset_token, user.get("name", user["username"]))
+    except Exception as e:
+        logger.error(f"Failed to send reset email: {e}")
+        raise HTTPException(status_code=503, detail="Failed to send email. Please try again later.")
+    
+    return {"message": "If an account exists with this email, you will receive a password reset link."}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    """Reset password using token from email"""
+    # Find the reset token
+    reset_record = await db.password_resets.find_one({"token": req.token}, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    
+    # Check if token is expired
+    expires_at = datetime.fromisoformat(reset_record["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.password_resets.delete_one({"token": req.token})
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+    
+    # Validate new password
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+    
+    # Update user's password
+    new_hash = hash_password(req.new_password)
+    result = await db.users.update_one(
+        {"id": reset_record["user_id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Failed to update password")
+    
+    # Delete the used reset token
+    await db.password_resets.delete_one({"token": req.token})
+    
+    logger.info(f"Password reset successful for user: {reset_record['user_id']}")
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+@api_router.get("/auth/verify-reset-token")
+async def verify_reset_token(token: str):
+    """Verify if a reset token is valid (for frontend validation)"""
+    reset_record = await db.password_resets.find_one({"token": token}, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Invalid reset link")
+    
+    expires_at = datetime.fromisoformat(reset_record["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.password_resets.delete_one({"token": token})
+        raise HTTPException(status_code=400, detail="Reset link has expired")
+    
+    return {"valid": True}
 
 # ===================== PROFILE ROUTES =====================
 @api_router.put("/profile/bartender")

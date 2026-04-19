@@ -151,6 +151,15 @@ const AuthPage = () => {
                     >
                       {loading ? "Signing in..." : "Sign In"}
                     </Button>
+                    <div className="text-center">
+                      <Link 
+                        to="/forgot-password" 
+                        className="text-primary text-sm hover:underline"
+                        data-testid="forgot-password-link"
+                      >
+                        Forgot your password?
+                      </Link>
+                    </div>
                   </form>
                 </TabsContent>
 

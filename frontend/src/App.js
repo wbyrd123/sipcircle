@@ -21,6 +21,8 @@ import TermsOfUse from "./pages/TermsOfUse";
 import DeleteAccountPage from "./pages/DeleteAccountPage";
 import SafetyStandardsPage from "./pages/SafetyStandardsPage";
 import AdminPage from "./pages/AdminPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -155,6 +157,8 @@ const AppRoutes = () => {
       <Route path="/terms" element={<TermsOfUse />} />
       <Route path="/delete-account" element={<DeleteAccountPage />} />
       <Route path="/safety" element={<SafetyStandardsPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/admin" element={<ProtectedRoute allowedRoles={["bartender", "customer"]}><AdminPage /></ProtectedRoute>} />
       
       {/* Fallback */}
