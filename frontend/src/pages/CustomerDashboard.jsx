@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
-  Wine, Search, Calendar, Users, MapPin, Settings, UserPlus, Loader2, Sparkles, QrCode, Share2, Copy
+  Wine, Search, Calendar, Users, MapPin, Settings, UserPlus, Loader2, Sparkles, QrCode, Share2, Copy, Eye
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -123,24 +123,30 @@ const CustomerDashboard = () => {
         </button>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-3">
+          <button 
+            onClick={() => navigate(`/u/${user.username}`)}
+            className="glass-card-hover p-4 text-left"
+            data-testid="view-profile-btn"
+          >
+            <Eye className="w-6 h-6 text-primary mb-2" />
+            <p className="text-white font-medium text-sm">View Profile</p>
+          </button>
           <button 
             onClick={() => navigate("/invites")}
-            className="glass-card-hover p-5 text-left"
+            className="glass-card-hover p-4 text-left"
             data-testid="invites-btn"
           >
-            <Calendar className="w-7 h-7 text-primary mb-2" />
-            <p className="text-white font-medium">Invites</p>
-            <p className="text-white/50 text-sm">Plan meetups</p>
+            <Calendar className="w-6 h-6 text-secondary mb-2" />
+            <p className="text-white font-medium text-sm">Invites</p>
           </button>
           <button 
             onClick={() => setShowQR(!showQR)}
-            className="glass-card-hover p-5 text-left"
+            className="glass-card-hover p-4 text-left"
             data-testid="qr-btn"
           >
-            <QrCode className="w-7 h-7 text-secondary mb-2" />
-            <p className="text-white font-medium">My QR Code</p>
-            <p className="text-white/50 text-sm">Share profile</p>
+            <QrCode className="w-6 h-6 text-white/70 mb-2" />
+            <p className="text-white font-medium text-sm">QR Code</p>
           </button>
         </div>
 

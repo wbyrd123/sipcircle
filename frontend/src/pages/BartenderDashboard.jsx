@@ -163,6 +163,15 @@ const BartenderDashboard = () => {
           {/* Quick Actions */}
           <div className="flex gap-3 mt-6">
             <Button 
+              onClick={() => navigate(`/b/${user.username}`)}
+              variant="outline"
+              className="flex-1 border-white/20 text-white hover:bg-white/5"
+              data-testid="view-profile-btn"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              View Profile
+            </Button>
+            <Button 
               onClick={() => setShowQR(!showQR)}
               variant="outline"
               className="flex-1 border-white/20 text-white hover:bg-white/5"
@@ -178,7 +187,7 @@ const BartenderDashboard = () => {
               data-testid="copy-link-btn"
             >
               <Copy className="w-4 h-4 mr-2" />
-              Copy Link
+              Share
             </Button>
           </div>
 
