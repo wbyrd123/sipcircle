@@ -429,34 +429,34 @@ const EditProfile = () => {
           <>
             {/* Payment Links */}
             <div className="glass-card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-white">Payment Links</h2>
-              <p className="text-white/50 text-sm">Add your payment links so customers can send tips</p>
+              <h2 className="text-lg font-semibold text-white">Payment Usernames</h2>
+              <p className="text-white/50 text-sm">Add your usernames so customers can send tips</p>
               <div className="space-y-2">
-                <Label className="text-white/80">Venmo Link</Label>
+                <Label className="text-white/80">Venmo Username</Label>
                 <Input
                   value={venmoLink}
                   onChange={(e) => setVenmoLink(e.target.value)}
-                  placeholder="https://venmo.com/u/yourname"
+                  placeholder="@yourname"
                   className="input-dark"
                   data-testid="venmo-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-white/80">Cash App Link</Label>
+                <Label className="text-white/80">Cash App Username</Label>
                 <Input
                   value={cashappLink}
                   onChange={(e) => setCashappLink(e.target.value)}
-                  placeholder="https://cash.app/$yourname"
+                  placeholder="$yourname"
                   className="input-dark"
                   data-testid="cashapp-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-white/80">PayPal Link</Label>
+                <Label className="text-white/80">PayPal Username</Label>
                 <Input
                   value={paypalLink}
                   onChange={(e) => setPaypalLink(e.target.value)}
-                  placeholder="https://paypal.me/yourname"
+                  placeholder="yourname"
                   className="input-dark"
                   data-testid="paypal-input"
                 />

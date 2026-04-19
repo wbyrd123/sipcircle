@@ -28,6 +28,24 @@ const UserProfile = () => {
 
   const profileUrl = `${WEB_URL}/u/${username}`;
 
+  // Helper functions to construct payment URLs from usernames
+  const getVenmoUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('@', '');
+    return `https://venmo.com/u/${cleanUsername}`;
+  };
+
+  const getCashAppUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('$', '');
+    return `https://cash.app/$${cleanUsername}`;
+  };
+
+  const getPayPalUrl = (username) => {
+    if (!username) return null;
+    return `https://paypal.me/${username}`;
+  };
+
   useEffect(() => {
     fetchProfile();
   }, [username]);
@@ -317,7 +335,7 @@ const UserProfile = () => {
                 <div className="space-y-2">
                   {profile.venmo_link && (
                     <a 
-                      href={profile.venmo_link}
+                      href={getVenmoUrl(profile.venmo_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-lg bg-[#008CFF]/10 border border-[#008CFF]/30 hover:bg-[#008CFF]/20 transition-colors"
@@ -329,7 +347,7 @@ const UserProfile = () => {
                   )}
                   {profile.cashapp_link && (
                     <a 
-                      href={profile.cashapp_link}
+                      href={getCashAppUrl(profile.cashapp_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-lg bg-[#00D632]/10 border border-[#00D632]/30 hover:bg-[#00D632]/20 transition-colors"
@@ -341,7 +359,7 @@ const UserProfile = () => {
                   )}
                   {profile.paypal_link && (
                     <a 
-                      href={profile.paypal_link}
+                      href={getPayPalUrl(profile.paypal_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-lg bg-[#0070BA]/10 border border-[#0070BA]/30 hover:bg-[#0070BA]/20 transition-colors"

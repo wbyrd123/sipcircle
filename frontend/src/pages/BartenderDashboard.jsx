@@ -22,6 +22,24 @@ const BartenderDashboard = () => {
 
   const profileUrl = `${WEB_URL}/b/${user?.username}`;
 
+  // Helper functions to construct payment URLs from usernames
+  const getVenmoUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('@', '');
+    return `https://venmo.com/u/${cleanUsername}`;
+  };
+
+  const getCashAppUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('$', '');
+    return `https://cash.app/$${cleanUsername}`;
+  };
+
+  const getPayPalUrl = (username) => {
+    if (!username) return null;
+    return `https://paypal.me/${username}`;
+  };
+
   useEffect(() => {
     fetchStats();
     fetchSuggestions();
@@ -186,7 +204,7 @@ const BartenderDashboard = () => {
           <div className="space-y-3">
             {user.venmo_link ? (
               <a 
-                href={user.venmo_link}
+                href={getVenmoUrl(user.venmo_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
@@ -197,7 +215,7 @@ const BartenderDashboard = () => {
             ) : null}
             {user.cashapp_link ? (
               <a 
-                href={user.cashapp_link}
+                href={getCashAppUrl(user.cashapp_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
@@ -208,7 +226,7 @@ const BartenderDashboard = () => {
             ) : null}
             {user.paypal_link ? (
               <a 
-                href={user.paypal_link}
+                href={getPayPalUrl(user.paypal_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
