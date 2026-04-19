@@ -33,7 +33,14 @@ export const WEB_URL = BACKEND_URL;
 // Theme Context
 export const ThemeContext = createContext(null);
 
-export const useTheme = () => useContext(ThemeContext);
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  // Return safe defaults if context not available
+  if (!context) {
+    return { theme: "dark", setTheme: () => {}, toggleTheme: () => {} };
+  }
+  return context;
+};
 
 const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
