@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, useTheme } from "../App";
 import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Switch } from "../components/ui/switch";
 import { 
-  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck, Sun, Moon
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import { Capacitor } from '@capacitor/core';
 const EditProfile = () => {
   const navigate = useNavigate();
   const { user, token, updateUser, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const fileInputRef = useRef(null);
   
   const [loading, setLoading] = useState(false);
@@ -420,6 +421,27 @@ const EditProfile = () => {
               checked={requireFollowApproval}
               onCheckedChange={setRequireFollowApproval}
               data-testid="require-approval-toggle"
+            />
+          </div>
+        </div>
+
+        {/* Appearance Settings */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            {theme === "dark" ? <Moon className="w-5 h-5 text-primary" /> : <Sun className="w-5 h-5 text-primary" />}
+            Appearance
+          </h2>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-white/5">
+            <div className="flex-1">
+              <p className="text-white font-medium">Light Mode</p>
+              <p className="text-white/50 text-sm mt-1">
+                Switch between dark and light themes
+              </p>
+            </div>
+            <Switch
+              checked={theme === "light"}
+              onCheckedChange={toggleTheme}
+              data-testid="theme-toggle"
             />
           </div>
         </div>

@@ -30,6 +30,32 @@ export const API = `${BACKEND_URL}/api`;
 // Web URL for sharing - use backend URL base (works for both web and native)
 export const WEB_URL = BACKEND_URL;
 
+// Theme Context
+export const ThemeContext = createContext(null);
+
+export const useTheme = () => useContext(ThemeContext);
+
+const ThemeProvider = ({ children }) => {
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("pourcircle_theme") || "dark";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pourcircle_theme", theme);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
 // Auth Context
 export const AuthContext = createContext(null);
 
@@ -170,13 +196,15 @@ const AppRoutes = () => {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <div className="App min-h-screen bg-background">
-          <SmartAppBanner />
-          <AppRoutes />
-          <Toaster position="top-center" richColors />
-        </div>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <div className="App min-h-screen bg-background">
+            <SmartAppBanner />
+            <AppRoutes />
+            <Toaster position="top-center" richColors />
+          </div>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
