@@ -22,7 +22,9 @@ import { Capacitor } from '@capacitor/core';
 const EditProfile = () => {
   const navigate = useNavigate();
   const { user, token, updateUser, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const themeContext = useTheme();
+  const theme = themeContext?.theme || "dark";
+  const toggleTheme = themeContext?.toggleTheme || (() => {});
   const fileInputRef = useRef(null);
   
   const [loading, setLoading] = useState(false);
