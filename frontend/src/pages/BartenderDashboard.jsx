@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
   Wine, MapPin, Clock, Users, QrCode, DollarSign, 
-  ExternalLink, Copy, Plus, Settings, UserPlus, Loader2, Sparkles
+  ExternalLink, Copy, Plus, Settings, UserPlus, Loader2, Sparkles, Calendar, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +19,7 @@ const BartenderDashboard = () => {
   const [stats, setStats] = useState({ followers: 0 });
   const [suggestions, setSuggestions] = useState([]);
   const [followingUsers, setFollowingUsers] = useState({});
+  const [invites, setInvites] = useState([]);
 
   const profileUrl = `${WEB_URL}/b/${user?.username}`;
 
@@ -43,6 +44,7 @@ const BartenderDashboard = () => {
   useEffect(() => {
     fetchStats();
     fetchSuggestions();
+    fetchInvites();
   }, []);
 
   const fetchStats = async () => {
@@ -53,6 +55,17 @@ const BartenderDashboard = () => {
       setStats({ followers: followersRes.data.length });
     } catch (e) {
       console.error("Error fetching stats:", e);
+    }
+  };
+
+  const fetchInvites = async () => {
+    try {
+      const invitesRes = await axios.get(`${API}/invites`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      setInvites(invitesRes.data.slice(0, 3));
+    } catch (e) {
+      console.error("Error fetching invites:", e);
     }
   };
 
@@ -185,15 +198,59 @@ const BartenderDashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <button 
-          onClick={() => navigate("/followers")}
-          className="glass-card-hover p-6 text-left w-full"
-          data-testid="followers-card"
-        >
-          <Users className="w-8 h-8 text-primary mb-3" />
-          <p className="text-3xl font-bold text-white">{stats.followers}</p>
-          <p className="text-white/60 text-sm">Followers</p>
-        </button>
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => navigate("/followers")}
+            className="glass-card-hover p-6 text-left"
+            data-testid="followers-card"
+          >
+            <Users className="w-8 h-8 text-primary mb-3" />
+            <p className="text-3xl font-bold text-white">{stats.followers}</p>
+            <p className="text-white/60 text-sm">Followers</p>
+          </button>
+          <button 
+            onClick={() => navigate("/invites")}
+            className="glass-card-hover p-6 text-left"
+            data-testid="invites-btn"
+          >
+            <Calendar className="w-8 h-8 text-secondary mb-3" />
+            <p className="text-white font-medium">Invites</p>
+            <p className="text-white/50 text-sm">Plan meetups</p>
+          </button>
+        </div>
+
+        {/* Upcoming Invites */}
+        {invites.length > 0 && (
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-secondary" />
+                Upcoming Invites
+              </h2>
+              <button 
+                onClick={() => navigate("/invites")}
+                className="text-primary text-sm flex items-center gap-1 hover:underline"
+              >
+                View All <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {invites.map((invite) => (
+                <div key={invite.id} className="p-4 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-white font-medium">{invite.location_name}</p>
+                      <p className="text-white/60 text-sm">{invite.datetime_str}</p>
+                    </div>
+                    <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                      {invite.creator_id === user.id ? "YOUR INVITE" : "INVITED"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Payment Links */}
         <div className="glass-card p-6">
