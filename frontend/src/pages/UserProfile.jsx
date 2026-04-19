@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, WEB_URL } from "../App";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
@@ -26,7 +26,7 @@ const UserProfile = () => {
   const [reportDetails, setReportDetails] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
 
-  const profileUrl = `${window.location.origin}/u/${username}`;
+  const profileUrl = `${WEB_URL}/u/${username}`;
 
   useEffect(() => {
     fetchProfile();

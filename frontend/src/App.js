@@ -25,6 +25,8 @@ import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
+// Web URL for sharing - use backend URL base (works for both web and native)
+export const WEB_URL = BACKEND_URL;
 
 // Auth Context
 export const AuthContext = createContext(null);

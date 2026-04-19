@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, WEB_URL } from "../App";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
@@ -20,7 +20,7 @@ const BartenderProfile = () => {
   const [showQR, setShowQR] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
-  const profileUrl = `${window.location.origin}/b/${username}`;
+  const profileUrl = `${WEB_URL}/b/${username}`;
 
   useEffect(() => {
     fetchBartender();

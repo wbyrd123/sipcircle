@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, WEB_URL } from "../App";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
@@ -20,7 +20,7 @@ const BartenderDashboard = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [followingUsers, setFollowingUsers] = useState({});
 
-  const profileUrl = `${window.location.origin}/b/${user?.username}`;
+  const profileUrl = `${WEB_URL}/b/${user?.username}`;
 
   useEffect(() => {
     fetchStats();

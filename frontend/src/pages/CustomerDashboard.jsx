@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, WEB_URL } from "../App";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
@@ -21,7 +21,7 @@ const CustomerDashboard = () => {
   const [followingUsers, setFollowingUsers] = useState({});
   const [showQR, setShowQR] = useState(false);
 
-  const profileUrl = `${window.location.origin}/u/${user?.username}`;
+  const profileUrl = `${WEB_URL}/u/${user?.username}`;
 
   useEffect(() => {
     fetchData();
