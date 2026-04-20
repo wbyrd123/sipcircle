@@ -25,6 +25,10 @@ const UserProfile = () => {
   const [reportReason, setReportReason] = useState("");
   const [reportDetails, setReportDetails] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(null); // 'followers' or 'following'
+  const [followersList, setFollowersList] = useState([]);
+  const [followingList, setFollowingList] = useState([]);
+  const [tabLoading, setTabLoading] = useState(false);
 
   const profileUrl = `${WEB_URL}/u/${username}`;
 
@@ -64,6 +68,28 @@ const UserProfile = () => {
       navigate("/");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTabData = async (tab) => {
+    if (activeTab === tab) {
+      setActiveTab(null);
+      return;
+    }
+    setTabLoading(true);
+    setActiveTab(tab);
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${API}/user/${username}/${tab}`, { headers });
+      if (tab === 'followers') {
+        setFollowersList(response.data);
+      } else {
+        setFollowingList(response.data);
+      }
+    } catch (e) {
+      toast.error(`Failed to load ${tab}`);
+    } finally {
+      setTabLoading(false);
     }
   };
 
@@ -237,13 +263,21 @@ const UserProfile = () => {
             </h1>
             <p className="text-white/60">@{profile.username}</p>
             <div className="flex items-center gap-3 mt-2">
-              <span className="flex items-center gap-1 text-white/60 text-sm">
+              <button 
+                onClick={() => fetchTabData('followers')}
+                className={`flex items-center gap-1 text-sm transition-colors ${activeTab === 'followers' ? 'text-primary' : 'text-white/60 hover:text-white'}`}
+                data-testid="followers-tab-btn"
+              >
                 <Users className="w-4 h-4 text-primary" />
                 {profile.follower_count} followers
-              </span>
-              <span className="flex items-center gap-1 text-white/60 text-sm">
+              </button>
+              <button 
+                onClick={() => fetchTabData('following')}
+                className={`flex items-center gap-1 text-sm transition-colors ${activeTab === 'following' ? 'text-primary' : 'text-white/60 hover:text-white'}`}
+                data-testid="following-tab-btn"
+              >
                 {profile.following_count} following
-              </span>
+              </button>
             </div>
             <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
               isBartender ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary'
@@ -306,6 +340,59 @@ const UserProfile = () => {
             </Button>
           )}
         </div>
+
+        {/* Followers/Following List */}
+        {activeTab && (
+          <div className="glass-card p-4" data-testid="followers-following-list">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white font-semibold capitalize">{activeTab}</h3>
+              <button 
+                onClick={() => setActiveTab(null)} 
+                className="text-white/40 hover:text-white text-sm"
+              >
+                Close
+              </button>
+            </div>
+            {tabLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {(activeTab === 'followers' ? followersList : followingList).length > 0 ? (
+                  (activeTab === 'followers' ? followersList : followingList).map((person) => (
+                    <button
+                      key={person.id}
+                      onClick={() => navigate(`/u/${person.username}`)}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                      data-testid={`${activeTab}-item-${person.username}`}
+                    >
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={getImageUrl(person.profile_image)} />
+                        <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                          {getInitials(person.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="text-left">
+                        <p className="text-white font-medium text-sm">{person.name}</p>
+                        <p className="text-white/50 text-xs">@{person.username}</p>
+                      </div>
+                      <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
+                        person.role === 'bartender' ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary'
+                      }`}>
+                        {person.role === 'bartender' ? 'Bartender' : 'Bar-Goer'}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-white/40 text-sm text-center py-4">
+                    {activeTab === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Bio */}
         {profile.bio && (

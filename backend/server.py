@@ -694,6 +694,7 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     bartender["is_following"] = is_following
     bartender["is_pending"] = is_pending
     bartender["follower_count"] = len(bartender.get("followers", []))
+    bartender["following_count"] = len(bartender.get("following", []))
     
     return bartender
 
@@ -801,6 +802,52 @@ async def get_followers(user: dict = Depends(get_current_user)):
 async def get_following(user: dict = Depends(get_current_user)):
     following_ids = user.get("following", [])
     following = await db.users.find({"id": {"$in": following_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return following
+
+@api_router.get("/user/{username}/followers")
+async def get_user_followers(username: str, current_user: dict = Depends(get_optional_user)):
+    """Get followers list for any user by username"""
+    profile = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if current user is blocked
+    if current_user and current_user["id"] in profile.get("blocked_users", []):
+        raise HTTPException(status_code=403, detail="You are blocked by this user")
+    
+    # Check privacy: if require_follow_approval is on and viewer is not following, return empty
+    if profile.get("require_follow_approval") and current_user:
+        if current_user["id"] != profile["id"] and current_user["id"] not in profile.get("followers", []):
+            return []
+    
+    follower_ids = profile.get("followers", [])
+    followers = await db.users.find(
+        {"id": {"$in": follower_ids}}, 
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).to_list(1000)
+    return followers
+
+@api_router.get("/user/{username}/following")
+async def get_user_following(username: str, current_user: dict = Depends(get_optional_user)):
+    """Get following list for any user by username"""
+    profile = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if current user is blocked
+    if current_user and current_user["id"] in profile.get("blocked_users", []):
+        raise HTTPException(status_code=403, detail="You are blocked by this user")
+    
+    # Check privacy: if require_follow_approval is on and viewer is not following, return empty
+    if profile.get("require_follow_approval") and current_user:
+        if current_user["id"] != profile["id"] and current_user["id"] not in profile.get("followers", []):
+            return []
+    
+    following_ids = profile.get("following", [])
+    following = await db.users.find(
+        {"id": {"$in": following_ids}}, 
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).to_list(1000)
     return following
 
 # ===================== PEOPLE YOU MAY KNOW =====================

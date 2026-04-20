@@ -13,6 +13,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - Universal follow system with "Approval Required" privacy toggle
 - "People You May Know" suggestions
 - Invites to meet for drinks (both customers AND bartenders can send)
+- **Followers/Following tabs on all profiles** - click to see full list, respects privacy settings
 
 ### Authentication
 - JWT-based auth with 20-day token expiration
@@ -28,7 +29,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - **Email:** SendGrid
 - **Maps:** Google Maps JavaScript API + Places API
 
-## Completed Features (as of April 19, 2026)
+## Completed Features (as of April 20, 2026)
 - [x] User registration and authentication
 - [x] Bartender and Customer profiles
 - [x] Follow/unfollow system with approval toggle
@@ -46,6 +47,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - [x] Fixed sharing links (standard web URLs)
 - [x] Android app name changed to "PourCircle"
 - [x] Google Maps API restriction fix (set to "None")
+- [x] **Followers/Following tabs on profiles** - clickable to view full list
 
 ## App Store Status
 - **iOS:** Build 19+ submitted to Apple App Store
@@ -76,10 +78,15 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - Capacitor Native Plugins (Camera, Splash Screen, Status Bar)
 - SendGrid (Email - User API Key)
 
+## Key API Endpoints
+- `GET /api/user/{username}/followers` - Get followers list for any user
+- `GET /api/user/{username}/following` - Get following list for any user
+- `POST /api/auth/forgot-password` - Send password reset email
+- `POST /api/auth/reset-password` - Reset password with token
+
 ## Key Files
 - `/app/backend/server.py` - Main backend with all API endpoints
+- `/app/frontend/src/pages/UserProfile.jsx` - User profile with followers/following tabs
+- `/app/frontend/src/pages/BartenderProfile.jsx` - Bartender profile with followers/following tabs
 - `/app/frontend/src/components/PlaceAutocomplete.jsx` - Google Maps autocomplete
 - `/app/frontend/src/pages/InvitesPage.jsx` - Invite creation/management
-- `/app/frontend/src/pages/EditProfile.jsx` - Profile settings with payment links, legal, light mode
-- `/app/frontend/src/pages/ForgotPasswordPage.jsx` - Password reset request
-- `/app/frontend/src/pages/ResetPasswordPage.jsx` - Password reset handler
