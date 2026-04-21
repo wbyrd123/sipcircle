@@ -31,7 +31,8 @@ const AuthPage = () => {
     try {
       const user = await login(loginForm.identifier, loginForm.password);
       toast.success(`Welcome back, ${user.name}!`);
-      navigate(user.role === "bartender" ? "/dashboard" : "/home");
+      // Navigation will be handled by AuthRedirect component after user state updates
+      // Don't navigate here - let the route change handle it
     } catch (e) {
       toast.error(e.response?.data?.detail || "Login failed");
     } finally {
@@ -53,7 +54,8 @@ const AuthPage = () => {
     try {
       const user = await register({ ...registerForm, role });
       toast.success(`Welcome to PourCircle, ${user.name}!`);
-      navigate(user.role === "bartender" ? "/dashboard" : "/home");
+      // Navigation will be handled by AuthRedirect component after user state updates
+      // Don't navigate here - let the route change handle it
     } catch (e) {
       if (e.response?.data?.detail) {
         toast.error(e.response.data.detail);

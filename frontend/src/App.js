@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { Toaster } from "./components/ui/sonner";
 
@@ -149,6 +149,22 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
+// Auth-aware redirect component - checks URL params for redirect
+const AuthRedirect = () => {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  
+  // Check for redirect URL in query params
+  const redirectParam = searchParams.get("redirect");
+  
+  if (redirectParam) {
+    return <Navigate to={redirectParam} replace />;
+  }
+  
+  // Default redirect based on role
+  return <Navigate to={user.role === "bartender" ? "/dashboard" : "/home"} replace />;
+};
+
 // App Routes
 const AppRoutes = () => {
   const { user, loading } = useAuth();
@@ -164,7 +180,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={user ? <Navigate to={user.role === "bartender" ? "/dashboard" : "/home"} /> : <LandingPage />} />
-      <Route path="/auth" element={user ? <Navigate to={user.role === "bartender" ? "/dashboard" : "/home"} /> : <AuthPage />} />
+      <Route path="/auth" element={user ? <AuthRedirect /> : <AuthPage />} />
       
       {/* Bartender Routes */}
       <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["bartender"]}><BartenderDashboard /></ProtectedRoute>} />

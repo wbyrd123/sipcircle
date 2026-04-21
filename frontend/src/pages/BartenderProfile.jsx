@@ -89,7 +89,7 @@ const BartenderProfile = () => {
 
   const handleFollow = async () => {
     if (!user) {
-      navigate("/auth");
+      navigate(`/auth?redirect=/b/${username}`);
       return;
     }
     setFollowLoading(true);
@@ -500,9 +500,14 @@ const BartenderProfile = () => {
         {/* Login CTA for non-users */}
         {!user && (
           <div className="glass-card p-6 text-center">
-            <p className="text-white/60 mb-4">Sign up to follow and message this bartender</p>
-            <Button onClick={() => navigate("/auth")} className="btn-primary">
-              Join PourCircle
+            <p className="text-white/60 mb-4">Sign up or login to follow this bartender</p>
+            <Button 
+              onClick={() => {
+                navigate(`/auth?redirect=/b/${username}`);
+              }} 
+              className="btn-primary"
+            >
+              Login / Sign Up
             </Button>
           </div>
         )}

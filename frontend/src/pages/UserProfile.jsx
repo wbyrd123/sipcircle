@@ -95,7 +95,7 @@ const UserProfile = () => {
 
   const handleFollow = async () => {
     if (!user) {
-      navigate("/auth");
+      navigate(`/auth?redirect=/u/${username}`);
       return;
     }
     setFollowLoading(true);
@@ -563,9 +563,14 @@ const UserProfile = () => {
         {/* Login CTA for non-users */}
         {!user && (
           <div className="glass-card p-5 text-center">
-            <p className="text-white/60 mb-3 text-sm">Sign up to follow and message this user</p>
-            <Button onClick={() => navigate("/auth")} className="btn-primary">
-              Join PourCircle
+            <p className="text-white/60 mb-3 text-sm">Sign up or login to follow this user</p>
+            <Button 
+              onClick={() => {
+                navigate(`/auth?redirect=/u/${username}`);
+              }} 
+              className="btn-primary"
+            >
+              Login / Sign Up
             </Button>
           </div>
         )}

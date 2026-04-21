@@ -14,6 +14,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - "People You May Know" suggestions
 - Invites to meet for drinks (both customers AND bartenders can send)
 - **Followers/Following tabs on all profiles** - click to see full list, respects privacy settings
+- **Post-login redirect** - Users who click "Login / Sign Up" from a profile are returned to that profile after authentication
 
 ### Authentication
 - JWT-based auth with 20-day token expiration
@@ -29,7 +30,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - **Email:** SendGrid
 - **Maps:** Google Maps JavaScript API + Places API
 
-## Completed Features (as of April 20, 2026)
+## Completed Features (as of April 21, 2026)
 - [x] User registration and authentication
 - [x] Bartender and Customer profiles
 - [x] Follow/unfollow system with approval toggle
@@ -47,11 +48,12 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - [x] Fixed sharing links (standard web URLs)
 - [x] Android app name changed to "PourCircle"
 - [x] Google Maps API restriction fix (set to "None")
-- [x] **Followers/Following tabs on profiles** - clickable to view full list
+- [x] Followers/Following tabs on profiles
+- [x] **Post-login redirect to profile** - After scanning QR and logging in, user returns to the profile they were viewing
 
 ## App Store Status
 - **iOS:** Build 19+ submitted to Apple App Store
-- **Android:** Submitted to Google Play (Closed Testing → Production eligible)
+- **Android:** Submitted to Google Play
 
 ## Pending Items
 
@@ -64,6 +66,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - [ ] Restaurant/Venue pages (claim profile, post specials, push notifications, analytics, Stripe tiers)
 - [ ] Push notifications
 - [ ] Custom domain
+- [ ] Deep linking (open app directly when scanning QR if installed)
 
 ### P3 (Low Priority)
 - [ ] Delete orphaned messaging files (MessagesPage.jsx, ConversationPage.jsx)
@@ -86,7 +89,7 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 
 ## Key Files
 - `/app/backend/server.py` - Main backend with all API endpoints
+- `/app/frontend/src/App.js` - Main app with AuthRedirect component for post-login routing
 - `/app/frontend/src/pages/UserProfile.jsx` - User profile with followers/following tabs
 - `/app/frontend/src/pages/BartenderProfile.jsx` - Bartender profile with followers/following tabs
-- `/app/frontend/src/components/PlaceAutocomplete.jsx` - Google Maps autocomplete
-- `/app/frontend/src/pages/InvitesPage.jsx` - Invite creation/management
+- `/app/frontend/src/pages/AuthPage.jsx` - Login/signup page
