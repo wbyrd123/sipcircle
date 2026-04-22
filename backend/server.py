@@ -351,11 +351,13 @@ class BartenderProfileUpdate(BaseModel):
     paypal_link: Optional[str] = None
     work_locations: Optional[List[WorkLocation]] = None
     require_follow_approval: Optional[bool] = None
+    followers_visibility: Optional[str] = None  # "everyone", "followers", "only_me"
 
 class CustomerProfileUpdate(BaseModel):
     name: Optional[str] = None
     bio: Optional[str] = None
     require_follow_approval: Optional[bool] = None
+    followers_visibility: Optional[str] = None  # "everyone", "followers", "only_me"
 
 class MessageCreate(BaseModel):
     recipient_id: str
@@ -440,7 +442,8 @@ async def register(req: RegisterRequest):
         "blocked_users": [],
         "follow_requests": [],
         "pending_follows": [],
-        "require_follow_approval": False
+        "require_follow_approval": False,
+        "followers_visibility": "everyone"  # Options: "everyone", "followers", "only_me"
     }
     
     if req.role == UserRole.BARTENDER:
@@ -815,9 +818,16 @@ async def get_user_followers(username: str, current_user: dict = Depends(get_opt
     if current_user and current_user["id"] in profile.get("blocked_users", []):
         raise HTTPException(status_code=403, detail="You are blocked by this user")
     
-    # Check privacy: if require_follow_approval is on and viewer is not following, return empty
-    if profile.get("require_follow_approval") and current_user:
-        if current_user["id"] != profile["id"] and current_user["id"] not in profile.get("followers", []):
+    # Check followers_visibility setting
+    visibility = profile.get("followers_visibility", "everyone")
+    is_own_profile = current_user and current_user["id"] == profile["id"]
+    is_follower = current_user and current_user["id"] in profile.get("followers", [])
+    
+    # Privacy check based on visibility setting
+    if not is_own_profile:
+        if visibility == "only_me":
+            return []
+        elif visibility == "followers" and not is_follower:
             return []
     
     follower_ids = profile.get("followers", [])
@@ -838,9 +848,16 @@ async def get_user_following(username: str, current_user: dict = Depends(get_opt
     if current_user and current_user["id"] in profile.get("blocked_users", []):
         raise HTTPException(status_code=403, detail="You are blocked by this user")
     
-    # Check privacy: if require_follow_approval is on and viewer is not following, return empty
-    if profile.get("require_follow_approval") and current_user:
-        if current_user["id"] != profile["id"] and current_user["id"] not in profile.get("followers", []):
+    # Check followers_visibility setting
+    visibility = profile.get("followers_visibility", "everyone")
+    is_own_profile = current_user and current_user["id"] == profile["id"]
+    is_follower = current_user and current_user["id"] in profile.get("followers", [])
+    
+    # Privacy check based on visibility setting
+    if not is_own_profile:
+        if visibility == "only_me":
+            return []
+        elif visibility == "followers" and not is_follower:
             return []
     
     following_ids = profile.get("following", [])

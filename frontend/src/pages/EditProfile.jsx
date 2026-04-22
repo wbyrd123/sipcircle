@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, API, useTheme } from "../App";
+import { useAuth, API } from "../App";
 import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Switch } from "../components/ui/switch";
 import { 
-  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck, Sun, Moon
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -22,9 +22,6 @@ import { Capacitor } from '@capacitor/core';
 const EditProfile = () => {
   const navigate = useNavigate();
   const { user, token, updateUser, logout } = useAuth();
-  const themeContext = useTheme();
-  const theme = themeContext?.theme || "dark";
-  const toggleTheme = themeContext?.toggleTheme || (() => {});
   const fileInputRef = useRef(null);
   
   const [loading, setLoading] = useState(false);
@@ -40,6 +37,7 @@ const EditProfile = () => {
   const [paypalLink, setPaypalLink] = useState(user?.paypal_link || "");
   const [locations, setLocations] = useState(user?.work_locations || []);
   const [requireFollowApproval, setRequireFollowApproval] = useState(user?.require_follow_approval || false);
+  const [followersVisibility, setFollowersVisibility] = useState(user?.followers_visibility || "everyone");
 
   const isBartender = user?.role === "bartender";
   const isNativePlatform = Capacitor.isNativePlatform();
@@ -163,8 +161,8 @@ const EditProfile = () => {
     try {
       const endpoint = isBartender ? "/profile/bartender" : "/profile/customer";
       const data = isBartender 
-        ? { name, bio, venmo_link: venmoLink, cashapp_link: cashappLink, paypal_link: paypalLink, work_locations: locations, require_follow_approval: requireFollowApproval }
-        : { name, bio, require_follow_approval: requireFollowApproval };
+        ? { name, bio, venmo_link: venmoLink, cashapp_link: cashappLink, paypal_link: paypalLink, work_locations: locations, require_follow_approval: requireFollowApproval, followers_visibility: followersVisibility }
+        : { name, bio, require_follow_approval: requireFollowApproval, followers_visibility: followersVisibility };
       
       const response = await axios.put(`${API}${endpoint}`, data, {
         headers: { Authorization: `Bearer ${token}` }
@@ -434,26 +432,21 @@ const EditProfile = () => {
               data-testid="require-approval-toggle"
             />
           </div>
-        </div>
-
-        {/* Appearance Settings */}
-        <div className="glass-card p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            {theme === "dark" ? <Moon className="w-5 h-5 text-primary" /> : <Sun className="w-5 h-5 text-primary" />}
-            Appearance
-          </h2>
-          <div className="flex items-center justify-between p-4 rounded-lg bg-white/5">
-            <div className="flex-1">
-              <p className="text-white font-medium">Light Mode</p>
-              <p className="text-white/50 text-sm mt-1">
-                Switch between dark and light themes
-              </p>
-            </div>
-            <Switch
-              checked={theme === "light"}
-              onCheckedChange={toggleTheme}
-              data-testid="theme-toggle"
-            />
+          <div className="p-4 rounded-lg bg-white/5">
+            <p className="text-white font-medium mb-2">Who can see your followers/following</p>
+            <p className="text-white/50 text-sm mb-3">
+              Control who can view your followers and following lists
+            </p>
+            <select
+              value={followersVisibility}
+              onChange={(e) => setFollowersVisibility(e.target.value)}
+              className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:border-primary focus:outline-none"
+              data-testid="followers-visibility-select"
+            >
+              <option value="everyone" className="bg-[#1a1a1a]">Everyone</option>
+              <option value="followers" className="bg-[#1a1a1a]">Followers only</option>
+              <option value="only_me" className="bg-[#1a1a1a]">Only me</option>
+            </select>
           </div>
         </div>
 
