@@ -181,7 +181,7 @@ storage_key = None
 # SendGrid Config
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "admin@pourcircle.net")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://craft-scene.preview.emergentagent.com")
+FRONTEND_URL = os.environ.get("FRONTEND_URL")
 
 def send_password_reset_email(to_email: str, reset_token: str, user_name: str):
     """Send password reset email via SendGrid"""
