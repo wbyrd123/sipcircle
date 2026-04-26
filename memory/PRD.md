@@ -1,20 +1,30 @@
 # PourCircle - Product Requirements Document
 
 ## Overview
-Social app connecting bartenders and bar-goers. Mobile-first approach with Capacitor wrapping for iOS and Android.
+Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobile-first approach with Capacitor wrapping for iOS and Android.
 
 ## Core Features
 
 ### User Profiles
-- **Bartenders:** Profile picture, multiple work locations/schedules, payment links (Venmo/CashApp/PayPal usernames), follower blocking, happy hour times & signature drinks, QR code sharing
+- **Bartenders:** Profile picture, multiple work locations/schedules, payment links, follower blocking, happy hour times & signature drinks, QR code sharing
 - **Customers:** Profile picture, QR code sharing, invite feature with Google Maps autocomplete
 
 ### Social Features
 - Universal follow system with "Approval Required" privacy toggle
 - "People You May Know" suggestions
 - Invites to meet for drinks (both customers AND bartenders can send)
-- **Followers/Following tabs on all profiles** - click to see full list, respects privacy settings
-- **Post-login redirect** - Users who click "Login / Sign Up" from a profile are returned to that profile after authentication
+- Followers/Following tabs on all profiles
+- Post-login redirect to profile from QR scan
+- Privacy controls for followers/following lists visibility
+
+### Venue Platform (NEW - Phase 1 Complete)
+- Venues page with zip code search
+- Venue profile pages with location details
+- Follow/unfollow venues
+- Venues appear in Following list alongside users
+- CTA for venue signup: "Get information on signing up your restaurant or bar by emailing admin@pourcircle.net"
+- QR code and share functionality for venues
+- Admin can create vendors and add locations
 
 ### Authentication
 - JWT-based auth with 20-day token expiration
@@ -30,66 +40,95 @@ Social app connecting bartenders and bar-goers. Mobile-first approach with Capac
 - **Email:** SendGrid
 - **Maps:** Google Maps JavaScript API + Places API
 
-## Completed Features (as of April 21, 2026)
-- [x] User registration and authentication
-- [x] Bartender and Customer profiles
-- [x] Follow/unfollow system with approval toggle
-- [x] Work locations with schedules
-- [x] Payment links (username-based)
-- [x] QR code profile sharing
-- [x] Invite system with Google Maps location search
-- [x] Bartender invites feature
-- [x] Forgot/Reset password via SendGrid
-- [x] View Profile buttons on dashboards
-- [x] Legal & Policies section in settings
-- [x] Light Mode toggle (UI only - CSS pending sync)
-- [x] iOS SceneDelegate fix for iPadOS 26
-- [x] Extended JWT to 20 days
-- [x] Fixed sharing links (standard web URLs)
-- [x] Android app name changed to "PourCircle"
-- [x] Google Maps API restriction fix (set to "None")
-- [x] Followers/Following tabs on profiles
-- [x] **Post-login redirect to profile** - After scanning QR and logging in, user returns to the profile they were viewing
-
 ## App Store Status
-- **iOS:** Build 19+ submitted to Apple App Store
-- **Android:** Submitted to Google Play
+- **iOS:** LIVE on App Store
+- **Android:** LIVE on Google Play
 
-## Pending Items
+## Vendor Platform Phases
 
-### P1 (High Priority)
-- [ ] Change Password feature (for logged-in users)
-- [ ] Minimum password requirements (8+ characters)
-- [ ] Light Mode CSS sync to local builds
+### Phase 1: Basic Venue Pages + Search ✅ COMPLETE
+- [x] Remove invite from bottom nav (bar-goers) → Replaced with Venues
+- [x] Add "Restaurants/Bars" icon to bottom nav (both user types)
+- [x] Zip code search → Results nearest to furthest
+- [x] Basic location pages (name, address, hours, phone)
+- [x] Follow button + QR code for locations
+- [x] Locations appear in Following list (new "Following" tab with People/Places sections)
+- [x] CTA: "Follow to receive important updates such as specials or new Stars joining our team"
+- [x] Admin endpoints to create vendors and add locations
 
-### P2 (Medium Priority)
-- [ ] Restaurant/Venue pages (claim profile, post specials, push notifications, analytics, Stripe tiers)
-- [ ] Push notifications
-- [ ] Custom domain
-- [ ] Deep linking (open app directly when scanning QR if installed)
+### Phase 2: Vendor Dashboard + Self-Service (NEXT)
+- [ ] Vendor login (web only)
+- [ ] Master Page (logo, menus, hours)
+- [ ] Location dropdown
+- [ ] Add/edit locations
+- [ ] Add Stars (search bartender username)
+- [ ] Menus: manual entry OR website links
+- [ ] Admin access to view/edit all vendors
 
-### P3 (Low Priority)
-- [ ] Delete orphaned messaging files (MessagesPage.jsx, ConversationPage.jsx)
+### Phase 3: Push Notifications
+- [ ] Firebase Cloud Messaging setup
+- [ ] Vendor → All followers (from Master)
+- [ ] Vendor → Specific location followers
+- [ ] Invite sent → Notification to recipient
 
-## Explicitly Removed
-- Messaging feature (removed per PRD)
-
-## 3rd Party Integrations
-- Emergent Object Storage (via Emergent LLM Key)
-- Google Maps JavaScript API + Places API (User API Key)
-- Firebase Analytics (iOS & Android)
-- Capacitor Native Plugins (Camera, Splash Screen, Status Bar)
-- SendGrid (Email - User API Key)
+### Phase 4: Bartender Updates + Cross-Follow
+- [ ] Bartenders add work location (Google Maps or manual)
+- [ ] "Follow [Venue Name]" button on bartender profile (if at registered vendor)
 
 ## Key API Endpoints
-- `GET /api/user/{username}/followers` - Get followers list for any user
-- `GET /api/user/{username}/following` - Get following list for any user
-- `POST /api/auth/forgot-password` - Send password reset email
-- `POST /api/auth/reset-password` - Reset password with token
+
+### Venue Endpoints (NEW)
+- `GET /api/venues/search?zip_code=XXXXX` - Search venues by zip code
+- `GET /api/venues/{location_id}` - Get venue location details
+- `POST /api/venues/{location_id}/follow` - Follow a venue
+- `DELETE /api/venues/{location_id}/follow` - Unfollow a venue
+- `GET /api/user/following-venues` - Get user's followed venues
+
+### Admin Vendor Endpoints (NEW)
+- `POST /api/admin/vendors` - Create new vendor
+- `GET /api/admin/vendors` - List all vendors
+- `GET /api/admin/vendors/{id}` - Get vendor details
+- `POST /api/admin/vendors/{id}/locations` - Add location to vendor
+- `PUT /api/admin/vendors/{id}/toggle` - Enable/disable vendor
+
+## Database Collections
+
+### venues (NEW)
+```json
+{
+  "id": "uuid",
+  "email": "vendor@example.com",
+  "password_hash": "...",
+  "name": "The Blue Bar",
+  "username": "the-blue-bar",
+  "logo": "path/to/logo",
+  "menus": [],
+  "hours": [],
+  "is_active": true,
+  "created_at": "ISO date"
+}
+```
+
+### venue_locations (NEW)
+```json
+{
+  "id": "uuid",
+  "venue_id": "vendor uuid",
+  "name": "Downtown",
+  "address": "123 Main St",
+  "zip_code": "10001",
+  "phone": "(555) 123-4567",
+  "hours": [],
+  "menus": [],
+  "stars": ["bartender_user_ids"],
+  "followers": ["user_ids"],
+  "created_at": "ISO date"
+}
+```
 
 ## Key Files
-- `/app/backend/server.py` - Main backend with all API endpoints
-- `/app/frontend/src/App.js` - Main app with AuthRedirect component for post-login routing
-- `/app/frontend/src/pages/UserProfile.jsx` - User profile with followers/following tabs
-- `/app/frontend/src/pages/BartenderProfile.jsx` - Bartender profile with followers/following tabs
-- `/app/frontend/src/pages/AuthPage.jsx` - Login/signup page
+- `/app/backend/server.py` - All API endpoints including venue endpoints
+- `/app/frontend/src/pages/VenuesPage.jsx` - Venue search page
+- `/app/frontend/src/pages/VenueProfile.jsx` - Venue location profile
+- `/app/frontend/src/pages/FollowersPage.jsx` - Updated with Following tab (People/Places)
+- `/app/frontend/src/components/BottomNav.jsx` - Updated with Venues icon

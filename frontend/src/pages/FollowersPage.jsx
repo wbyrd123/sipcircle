@@ -5,7 +5,7 @@ import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
-import { ArrowLeft, Users, MessageCircle, Ban, Check } from "lucide-react";
+import { ArrowLeft, Users, MessageCircle, Ban, Check, Store, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -16,9 +16,11 @@ const FollowersPage = () => {
   const navigate = useNavigate();
   const { user, token } = useAuth();
   const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [followingVenues, setFollowingVenues] = useState([]);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showBlocked, setShowBlocked] = useState(false);
+  const [activeTab, setActiveTab] = useState("followers"); // "followers", "following", "blocked"
   const [blockConfirm, setBlockConfirm] = useState(null);
 
   useEffect(() => {
@@ -27,11 +29,15 @@ const FollowersPage = () => {
 
   const fetchData = async () => {
     try {
-      const [followersRes, blockedRes] = await Promise.all([
+      const [followersRes, followingRes, followingVenuesRes, blockedRes] = await Promise.all([
         axios.get(`${API}/followers`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/following`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/user/following-venues`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/blocked`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
       setFollowers(followersRes.data);
+      setFollowing(followingRes.data);
+      setFollowingVenues(followingVenuesRes.data);
       setBlockedUsers(blockedRes.data);
     } catch (e) {
       console.error("Error:", e);
@@ -70,8 +76,6 @@ const FollowersPage = () => {
     return name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?";
   };
 
-  const displayList = showBlocked ? blockedUsers : followers;
-
   return (
     <div className="min-h-screen bg-background pb-safe" data-testid="followers-page">
       {/* Header */}
@@ -86,23 +90,31 @@ const FollowersPage = () => {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-lg font-semibold text-white">
-          {showBlocked ? "Blocked Users" : "Followers"}
+          {activeTab === "following" ? "Following" : activeTab === "blocked" ? "Blocked Users" : "Followers"}
         </h1>
       </header>
 
       {/* Tabs */}
-      <div className="flex p-4 gap-2">
+      <div className="flex p-4 gap-2 overflow-x-auto">
         <Button
-          onClick={() => setShowBlocked(false)}
-          className={`flex-1 ${!showBlocked ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setActiveTab("followers")}
+          className={`flex-1 ${activeTab === "followers" ? "btn-primary" : "btn-secondary"}`}
           data-testid="followers-tab"
         >
           <Users className="w-4 h-4 mr-2" />
           Followers ({followers.length})
         </Button>
         <Button
-          onClick={() => setShowBlocked(true)}
-          className={`flex-1 ${showBlocked ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setActiveTab("following")}
+          className={`flex-1 ${activeTab === "following" ? "btn-primary" : "btn-secondary"}`}
+          data-testid="following-tab"
+        >
+          <UserCheck className="w-4 h-4 mr-2" />
+          Following ({following.length + followingVenues.length})
+        </Button>
+        <Button
+          onClick={() => setActiveTab("blocked")}
+          className={`flex-1 ${activeTab === "blocked" ? "btn-primary" : "btn-secondary"}`}
           data-testid="blocked-tab"
         >
           <Ban className="w-4 h-4 mr-2" />
@@ -115,9 +127,83 @@ const FollowersPage = () => {
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : displayList.length > 0 ? (
+        ) : activeTab === "following" ? (
+          <div className="space-y-4">
+            {/* Following Users */}
+            {following.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-white/60 text-sm font-medium flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  People ({following.length})
+                </h3>
+                {following.map((person) => (
+                  <button
+                    key={person.id}
+                    onClick={() => navigate(person.role === "bartender" ? `/b/${person.username}` : `/u/${person.username}`)}
+                    className="w-full flex items-center gap-3 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    <Avatar className="w-12 h-12 border border-white/10">
+                      <AvatarImage src={getImageUrl(person.profile_image)} />
+                      <AvatarFallback className="bg-primary/20 text-primary">
+                        {getInitials(person.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-white font-medium truncate">{person.name}</p>
+                      <p className="text-white/60 text-sm">@{person.username}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${
+                      person.role === 'bartender' ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary'
+                    }`}>
+                      {person.role === 'bartender' ? 'Bartender' : 'Bar-Goer'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {/* Following Venues */}
+            {followingVenues.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-white/60 text-sm font-medium flex items-center gap-2">
+                  <Store className="w-4 h-4" />
+                  Places ({followingVenues.length})
+                </h3>
+                {followingVenues.map((venue) => (
+                  <button
+                    key={venue.id}
+                    onClick={() => navigate(`/venue/${venue.id}`)}
+                    className="w-full flex items-center gap-3 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    <Avatar className="w-12 h-12 border border-white/10">
+                      <AvatarImage src={getImageUrl(venue.venue_logo)} />
+                      <AvatarFallback className="bg-primary/20 text-primary">
+                        {venue.venue_name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "V"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-white font-medium truncate">{venue.venue_name}</p>
+                      <p className="text-white/60 text-sm">{venue.name}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-primary/20 text-primary">
+                      Venue
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {following.length === 0 && followingVenues.length === 0 && (
+              <div className="text-center py-12">
+                <UserCheck className="w-12 h-12 text-white/20 mx-auto mb-3" />
+                <p className="text-white/40">You're not following anyone yet</p>
+                <p className="text-white/30 text-sm mt-1">Discover bartenders and venues to follow!</p>
+              </div>
+            )}
+          </div>
+        ) : (activeTab === "followers" ? followers : blockedUsers).length > 0 ? (
           <div className="space-y-2">
-            {displayList.map((person) => (
+            {(activeTab === "followers" ? followers : blockedUsers).map((person) => (
               <div
                 key={person.id}
                 className="flex items-center gap-3 p-4 rounded-xl bg-white/5"
@@ -133,17 +219,8 @@ const FollowersPage = () => {
                   <p className="text-white/60 text-sm">@{person.username}</p>
                 </div>
                 <div className="flex gap-2">
-                  {!showBlocked ? (
+                  {activeTab === "followers" ? (
                     <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => navigate(`/messages/${person.id}`)}
-                        className="text-white/60 hover:text-primary"
-                        data-testid={`message-${person.id}`}
-                      >
-                        <MessageCircle className="w-5 h-5" />
-                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -171,7 +248,7 @@ const FollowersPage = () => {
           </div>
         ) : (
           <div className="text-center py-16">
-            {showBlocked ? (
+            {activeTab === "blocked" ? (
               <>
                 <Ban className="w-16 h-16 text-white/20 mx-auto mb-4" />
                 <p className="text-white/60">No blocked users</p>

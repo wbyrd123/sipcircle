@@ -371,6 +371,64 @@ class InviteCreate(BaseModel):
     datetime_str: str
     message: Optional[str] = None
 
+# ===================== VENUE MODELS =====================
+class VenueMenu(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # "Lunch", "Dinner", "Happy Hour", etc.
+    menu_type: str = "link"  # "link" or "manual"
+    url: Optional[str] = None  # For link type
+    items: Optional[List[dict]] = []  # For manual type: [{name, description, price}]
+
+class VenueHours(BaseModel):
+    day: str
+    open_time: str
+    close_time: str
+    is_closed: bool = False
+
+class VenueLocation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # "Downtown", "Uptown", etc.
+    address: str
+    zip_code: str
+    phone: Optional[str] = None
+    hours: List[VenueHours] = []
+    menus: List[VenueMenu] = []  # Can override master menus
+    stars: List[str] = []  # Bartender user IDs
+    followers: List[str] = []
+    qr_code_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class VenueCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+class VenueUpdate(BaseModel):
+    name: Optional[str] = None
+    logo: Optional[str] = None
+    menus: Optional[List[VenueMenu]] = None
+    hours: Optional[List[VenueHours]] = None
+
+class VenueLocationCreate(BaseModel):
+    name: str
+    address: str
+    zip_code: str
+    phone: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class VenueLocationUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    zip_code: Optional[str] = None
+    phone: Optional[str] = None
+    hours: Optional[List[dict]] = None
+    menus: Optional[List[dict]] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
 # ===================== AUTH HELPERS =====================
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -1323,6 +1381,300 @@ async def admin_delete_user(user_id: str, admin: dict = Depends(get_admin_user))
 async def admin_get_reports(admin: dict = Depends(get_admin_user)):
     reports = await db.reports.find({}, {"_id": 0}).to_list(1000)
     return reports
+
+# ===================== VENUE ENDPOINTS =====================
+
+@api_router.get("/venues/search")
+async def search_venues(zip_code: str, user: dict = Depends(get_optional_user)):
+    """Search venues by zip code, returns locations sorted by distance"""
+    # Find all venue locations matching or near the zip code
+    locations = await db.venue_locations.find(
+        {"zip_code": {"$regex": f"^{zip_code[:3]}"}},  # Match first 3 digits for nearby
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations if loc.get("venue_id")]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    # Combine location data with venue data
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        if venue.get("is_active", True):  # Only show active venues
+            results.append({
+                **loc,
+                "venue_name": venue.get("name"),
+                "venue_logo": venue.get("logo"),
+                "is_following": user["id"] in loc.get("followers", []) if user else False
+            })
+    
+    # Sort by exact zip match first, then by zip code proximity
+    results.sort(key=lambda x: (0 if x.get("zip_code") == zip_code else 1, x.get("zip_code", "")))
+    
+    return results
+
+@api_router.get("/venues/{location_id}")
+async def get_venue_location(location_id: str, user: dict = Depends(get_optional_user)):
+    """Get a specific venue location with full details"""
+    location = await db.venue_locations.find_one({"id": location_id}, {"_id": 0})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    # Get parent venue
+    venue = await db.venues.find_one({"id": location.get("venue_id")}, {"_id": 0, "password_hash": 0})
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+    
+    # Get Stars (bartenders) info
+    star_ids = location.get("stars", [])
+    stars = []
+    if star_ids:
+        stars = await db.users.find(
+            {"id": {"$in": star_ids}},
+            {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+        ).to_list(100)
+    
+    # Merge master menus with location menus (location overrides master)
+    menus = venue.get("menus", [])
+    location_menus = location.get("menus", [])
+    if location_menus:
+        menus = location_menus
+    
+    # Merge master hours with location hours
+    hours = venue.get("hours", [])
+    location_hours = location.get("hours", [])
+    if location_hours:
+        hours = location_hours
+    
+    return {
+        **location,
+        "venue_name": venue.get("name"),
+        "venue_logo": venue.get("logo"),
+        "menus": menus,
+        "hours": hours,
+        "stars": stars,
+        "follower_count": len(location.get("followers", [])),
+        "is_following": user["id"] in location.get("followers", []) if user else False
+    }
+
+@api_router.post("/venues/{location_id}/follow")
+async def follow_venue_location(location_id: str, user: dict = Depends(get_current_user)):
+    """Follow a venue location"""
+    location = await db.venue_locations.find_one({"id": location_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    user_id = user["id"]
+    if user_id in location.get("followers", []):
+        raise HTTPException(status_code=400, detail="Already following this location")
+    
+    # Add user to location's followers
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$addToSet": {"followers": user_id}}
+    )
+    
+    # Add location to user's following_venues list
+    await db.users.update_one(
+        {"id": user_id},
+        {"$addToSet": {"following_venues": location_id}}
+    )
+    
+    return {"success": True, "message": "Now following this location"}
+
+@api_router.delete("/venues/{location_id}/follow")
+async def unfollow_venue_location(location_id: str, user: dict = Depends(get_current_user)):
+    """Unfollow a venue location"""
+    location = await db.venue_locations.find_one({"id": location_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    user_id = user["id"]
+    
+    # Remove user from location's followers
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$pull": {"followers": user_id}}
+    )
+    
+    # Remove location from user's following_venues list
+    await db.users.update_one(
+        {"id": user_id},
+        {"$pull": {"following_venues": location_id}}
+    )
+    
+    return {"success": True, "message": "Unfollowed this location"}
+
+@api_router.get("/user/following-venues")
+async def get_following_venues(user: dict = Depends(get_current_user)):
+    """Get list of venues the user is following"""
+    following_venue_ids = user.get("following_venues", [])
+    
+    if not following_venue_ids:
+        return []
+    
+    locations = await db.venue_locations.find(
+        {"id": {"$in": following_venue_ids}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        results.append({
+            **loc,
+            "venue_name": venue.get("name"),
+            "venue_logo": venue.get("logo")
+        })
+    
+    return results
+
+# ===================== VENDOR ADMIN ENDPOINTS (for venue owners) =====================
+
+@api_router.post("/vendor/auth/login")
+async def vendor_login(identifier: str = "", password: str = ""):
+    """Vendor login endpoint"""
+    if not identifier or not password:
+        raise HTTPException(status_code=400, detail="Missing credentials")
+    
+    vendor = await db.venues.find_one(
+        {"$or": [{"email": identifier.lower()}, {"username": identifier.lower()}]},
+        {"_id": 0}
+    )
+    
+    if not vendor or not verify_password(password, vendor.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not vendor.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Account is disabled")
+    
+    token = jwt.encode(
+        {"vendor_id": vendor["id"], "exp": datetime.now(timezone.utc) + timedelta(days=20)},
+        JWT_SECRET,
+        algorithm="HS256"
+    )
+    
+    # Remove sensitive data
+    vendor.pop("password_hash", None)
+    
+    return {"token": token, "vendor": vendor}
+
+# ===================== SUPER ADMIN: Create Vendors =====================
+
+@api_router.post("/admin/vendors")
+async def admin_create_vendor(req: VenueCreate, admin: dict = Depends(get_admin_user)):
+    """Admin creates a new vendor account"""
+    # Check if email already exists
+    existing = await db.venues.find_one({"email": req.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    vendor_id = str(uuid.uuid4())
+    username = req.name.lower().replace(" ", "-").replace("'", "")
+    
+    # Ensure unique username
+    existing_username = await db.venues.find_one({"username": username})
+    counter = 1
+    original_username = username
+    while existing_username:
+        username = f"{original_username}-{counter}"
+        existing_username = await db.venues.find_one({"username": username})
+        counter += 1
+    
+    vendor = {
+        "id": vendor_id,
+        "email": req.email.lower(),
+        "password_hash": hash_password(req.password),
+        "name": req.name,
+        "username": username,
+        "logo": None,
+        "menus": [],
+        "hours": [],
+        "locations": [],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": admin["id"]
+    }
+    
+    await db.venues.insert_one(vendor)
+    vendor.pop("password_hash")
+    vendor.pop("_id", None)
+    
+    logger.info(f"Vendor {req.name} created by admin {admin.get('username')}")
+    return {"success": True, "vendor": vendor}
+
+@api_router.get("/admin/vendors")
+async def admin_list_vendors(admin: dict = Depends(get_admin_user)):
+    """List all vendors"""
+    vendors = await db.venues.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    
+    # Get location count for each vendor
+    for vendor in vendors:
+        location_count = await db.venue_locations.count_documents({"venue_id": vendor["id"]})
+        vendor["location_count"] = location_count
+    
+    return vendors
+
+@api_router.get("/admin/vendors/{vendor_id}")
+async def admin_get_vendor(vendor_id: str, admin: dict = Depends(get_admin_user)):
+    """Get vendor details including all locations"""
+    vendor = await db.venues.find_one({"id": vendor_id}, {"_id": 0, "password_hash": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    locations = await db.venue_locations.find({"venue_id": vendor_id}, {"_id": 0}).to_list(100)
+    vendor["locations"] = locations
+    
+    return vendor
+
+@api_router.put("/admin/vendors/{vendor_id}/toggle")
+async def admin_toggle_vendor(vendor_id: str, admin: dict = Depends(get_admin_user)):
+    """Enable/disable a vendor account"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    new_status = not vendor.get("is_active", True)
+    await db.venues.update_one({"id": vendor_id}, {"$set": {"is_active": new_status}})
+    
+    return {"success": True, "is_active": new_status}
+
+@api_router.post("/admin/vendors/{vendor_id}/locations")
+async def admin_add_location(vendor_id: str, req: VenueLocationCreate, admin: dict = Depends(get_admin_user)):
+    """Add a location to a vendor"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    location_id = str(uuid.uuid4())
+    location = {
+        "id": location_id,
+        "venue_id": vendor_id,
+        "name": req.name,
+        "address": req.address,
+        "zip_code": req.zip_code,
+        "phone": req.phone,
+        "latitude": req.latitude,
+        "longitude": req.longitude,
+        "hours": [],
+        "menus": [],
+        "stars": [],
+        "followers": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.venue_locations.insert_one(location)
+    location.pop("_id", None)
+    
+    logger.info(f"Location {req.name} added to vendor {vendor['name']} by admin {admin.get('username')}")
+    return {"success": True, "location": location}
 
 # Include router and middleware
 app.include_router(api_router)

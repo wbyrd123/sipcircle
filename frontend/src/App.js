@@ -23,6 +23,8 @@ import SafetyStandardsPage from "./pages/SafetyStandardsPage";
 import AdminPage from "./pages/AdminPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import VenuesPage from "./pages/VenuesPage";
+import VenueProfile from "./pages/VenueProfile";
 import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -200,6 +202,10 @@ const AppRoutes = () => {
       
       {/* Universal User Profile */}
       <Route path="/u/:username" element={<UserProfile />} />
+      
+      {/* Venue Routes */}
+      <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
+      <Route path="/venue/:locationId" element={<VenueProfile />} />
       
       {/* Public Pages */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
