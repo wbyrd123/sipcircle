@@ -754,7 +754,14 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     is_pending = user and user["id"] in bartender.get("follow_requests", [])
     bartender["is_following"] = is_following
     bartender["is_pending"] = is_pending
-    bartender["follower_count"] = len(bartender.get("followers", []))
+    
+    # Count only existing followers (not deleted users)
+    follower_ids = bartender.get("followers", [])
+    if follower_ids:
+        existing_followers = await db.users.count_documents({"id": {"$in": follower_ids}})
+        bartender["follower_count"] = existing_followers
+    else:
+        bartender["follower_count"] = 0
     
     # Following count includes both users and venues
     following_users_count = len(bartender.get("following", []))
@@ -809,7 +816,14 @@ async def get_user_profile(username: str, user: dict = Depends(get_optional_user
     is_pending = user and user["id"] in profile.get("follow_requests", [])
     profile["is_following"] = is_following
     profile["is_pending"] = is_pending
-    profile["follower_count"] = len(profile.get("followers", []))
+    
+    # Count only existing followers (not deleted users)
+    follower_ids = profile.get("followers", [])
+    if follower_ids:
+        existing_followers = await db.users.count_documents({"id": {"$in": follower_ids}})
+        profile["follower_count"] = existing_followers
+    else:
+        profile["follower_count"] = 0
     
     # Following count includes both users and venues
     following_users_count = len(profile.get("following", []))
