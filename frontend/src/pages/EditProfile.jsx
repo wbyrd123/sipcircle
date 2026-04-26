@@ -9,7 +9,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Switch } from "../components/ui/switch";
 import { 
-  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck
+  ArrowLeft, Camera, Plus, Trash2, Save, LogOut, MapPin, Clock, GlassWater, UserX, Shield, FileText, ScrollText, ShieldCheck, Key, Eye, EyeOff, Check, X
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -28,6 +28,15 @@ const EditProfile = () => {
   const [uploading, setUploading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  
+  // Change password state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   
   // Form state
   const [name, setName] = useState(user?.name || "");
@@ -196,6 +205,41 @@ const EditProfile = () => {
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);
+    }
+  };
+
+  // Password validation checks
+  const passwordChecks = {
+    length: newPassword.length >= 8,
+    uppercase: /[A-Z]/.test(newPassword),
+    number: /[0-9]/.test(newPassword),
+    match: newPassword === confirmPassword && confirmPassword.length > 0
+  };
+  const isPasswordValid = passwordChecks.length && passwordChecks.uppercase && passwordChecks.number && passwordChecks.match;
+
+  const handleChangePassword = async () => {
+    if (!isPasswordValid) {
+      toast.error("Please meet all password requirements");
+      return;
+    }
+    
+    setChangingPassword(true);
+    try {
+      await axios.post(`${API}/auth/change-password`, {
+        current_password: currentPassword,
+        new_password: newPassword
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Password changed successfully!");
+      setShowChangePassword(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to change password");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -448,6 +492,117 @@ const EditProfile = () => {
               <option value="only_me" className="bg-[#1a1a1a]">Only me</option>
             </select>
           </div>
+        </div>
+
+        {/* Change Password */}
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Key className="w-5 h-5 text-primary" />
+              Password
+            </h2>
+            <Button
+              onClick={() => setShowChangePassword(!showChangePassword)}
+              variant="ghost"
+              className="text-primary text-sm"
+              data-testid="change-password-toggle"
+            >
+              {showChangePassword ? "Cancel" : "Change Password"}
+            </Button>
+          </div>
+          
+          {showChangePassword && (
+            <div className="space-y-4 pt-2">
+              {/* Current Password */}
+              <div className="space-y-2">
+                <Label className="text-white/80">Current Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="input-dark pr-10"
+                    placeholder="Enter current password"
+                    data-testid="current-password-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              
+              {/* New Password */}
+              <div className="space-y-2">
+                <Label className="text-white/80">New Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="input-dark pr-10"
+                    placeholder="Enter new password"
+                    data-testid="new-password-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Confirm Password */}
+              <div className="space-y-2">
+                <Label className="text-white/80">Confirm New Password</Label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input-dark"
+                  placeholder="Confirm new password"
+                  data-testid="confirm-password-input"
+                />
+              </div>
+              
+              {/* Password Requirements */}
+              <div className="p-3 rounded-lg bg-white/5 space-y-2">
+                <p className="text-white/60 text-xs font-medium mb-2">Password Requirements:</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className={`flex items-center gap-2 ${passwordChecks.length ? 'text-green-400' : 'text-white/40'}`}>
+                    {passwordChecks.length ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                    <span>8+ characters</span>
+                  </div>
+                  <div className={`flex items-center gap-2 ${passwordChecks.uppercase ? 'text-green-400' : 'text-white/40'}`}>
+                    {passwordChecks.uppercase ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                    <span>1 uppercase</span>
+                  </div>
+                  <div className={`flex items-center gap-2 ${passwordChecks.number ? 'text-green-400' : 'text-white/40'}`}>
+                    {passwordChecks.number ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                    <span>1 number</span>
+                  </div>
+                  <div className={`flex items-center gap-2 ${passwordChecks.match ? 'text-green-400' : 'text-white/40'}`}>
+                    {passwordChecks.match ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                    <span>Passwords match</span>
+                  </div>
+                </div>
+              </div>
+              
+              <Button
+                onClick={handleChangePassword}
+                disabled={!isPasswordValid || changingPassword || !currentPassword}
+                className="w-full btn-primary"
+                data-testid="submit-change-password"
+              >
+                {changingPassword ? "Changing..." : "Update Password"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Bartender-specific fields */}

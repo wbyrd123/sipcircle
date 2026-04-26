@@ -324,6 +324,10 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class AuthResponse(BaseModel):
     token: str
     user: dict
@@ -430,6 +434,22 @@ class VenueLocationUpdate(BaseModel):
     longitude: Optional[float] = None
 
 # ===================== AUTH HELPERS =====================
+def validate_password(password: str) -> tuple[bool, str]:
+    """
+    Validate password meets minimum requirements:
+    - At least 8 characters
+    - At least 1 uppercase letter
+    - At least 1 number
+    Returns (is_valid, error_message)
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one number"
+    return True, ""
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -475,6 +495,11 @@ async def get_optional_user(authorization: str = Header(None), auth: str = Query
 # ===================== AUTH ROUTES =====================
 @api_router.post("/auth/register", response_model=AuthResponse)
 async def register(req: RegisterRequest):
+    # Validate password requirements
+    is_valid, error_msg = validate_password(req.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
     # Check existing
     if await db.users.find_one({"email": req.email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -627,8 +652,9 @@ async def reset_password(req: ResetPasswordRequest):
         raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
     
     # Validate new password
-    if len(req.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+    is_valid, error_msg = validate_password(req.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
     
     # Update user's password
     new_hash = hash_password(req.new_password)
@@ -660,6 +686,32 @@ async def verify_reset_token(token: str):
         raise HTTPException(status_code=400, detail="Reset link has expired")
     
     return {"valid": True}
+
+@api_router.post("/auth/change-password")
+async def change_password(req: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    """Change password for logged-in user"""
+    # Verify current password
+    if not verify_password(req.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    is_valid, error_msg = validate_password(req.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Check new password is different from current
+    if req.current_password == req.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+    
+    # Update password
+    new_hash = hash_password(req.new_password)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    logger.info(f"Password changed for user: {user['username']}")
+    return {"message": "Password changed successfully"}
 
 # ===================== PROFILE ROUTES =====================
 @api_router.put("/profile/bartender")

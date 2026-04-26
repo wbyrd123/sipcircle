@@ -146,3 +146,6 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - Added "Following" card to Dashboard stats grid
 - Updated backend `/api/bartender/{username}` and `/api/user/{username}` endpoints to return `following_count` including venues
 - Followers page now respects `?tab=following` URL parameter from Dashboard navigation
+- Fixed follower count discrepancy: Profile now counts only existing users (excludes deleted accounts)
+- **Added Change Password feature** in Settings with requirements: 8+ chars, 1 uppercase, 1 number
+- Password requirements now enforced on: Registration, Password Reset, Change Password
