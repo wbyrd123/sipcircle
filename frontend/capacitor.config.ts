@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.pourcircle.app',
+  appId: 'com.pourcircle.wb',
   appName: 'SipCircle',
   webDir: 'build',
   server: {
@@ -24,6 +24,10 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'dark',
       backgroundColor: '#050505',
+    },
+    Camera: {
+      // iOS specific settings
+      presentationStyle: 'popover', // Required for iPad to prevent crashes
     },
   },
   ios: {

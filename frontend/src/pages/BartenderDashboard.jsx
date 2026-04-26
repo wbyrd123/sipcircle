@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, WEB_URL } from "../App";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
   Wine, MapPin, Clock, Users, QrCode, DollarSign, 
-  ExternalLink, Copy, Plus, Settings, UserPlus, Loader2, Sparkles
+  ExternalLink, Copy, Plus, Settings, UserPlus, Loader2, Sparkles, Calendar, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,25 +16,66 @@ const BartenderDashboard = () => {
   const navigate = useNavigate();
   const { user, token, updateUser } = useAuth();
   const [showQR, setShowQR] = useState(false);
-  const [stats, setStats] = useState({ followers: 0 });
+  const [stats, setStats] = useState({ followers: 0, following: 0 });
   const [suggestions, setSuggestions] = useState([]);
   const [followingUsers, setFollowingUsers] = useState({});
+  const [invites, setInvites] = useState([]);
 
-  const profileUrl = `${window.location.origin}/b/${user?.username}`;
+  const profileUrl = `${WEB_URL}/b/${user?.username}`;
+
+  // Helper functions to construct payment URLs from usernames
+  const getVenmoUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('@', '');
+    return `https://venmo.com/u/${cleanUsername}`;
+  };
+
+  const getCashAppUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('$', '');
+    return `https://cash.app/$${cleanUsername}`;
+  };
+
+  const getPayPalUrl = (username) => {
+    if (!username) return null;
+    return `https://paypal.me/${username}`;
+  };
 
   useEffect(() => {
     fetchStats();
     fetchSuggestions();
+    fetchInvites();
   }, []);
 
   const fetchStats = async () => {
     try {
-      const followersRes = await axios.get(`${API}/followers`, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      const [followersRes, followingRes, followingVenuesRes] = await Promise.all([
+        axios.get(`${API}/followers`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/following`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/user/following-venues`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      const followingUsersCount = followingRes.data.length;
+      const followingVenuesCount = followingVenuesRes.data.length;
+      const totalFollowing = followingUsersCount + followingVenuesCount;
+      
+      setStats({ 
+        followers: followersRes.data.length,
+        following: totalFollowing
       });
-      setStats({ followers: followersRes.data.length });
     } catch (e) {
       console.error("Error fetching stats:", e);
+    }
+  };
+
+  const fetchInvites = async () => {
+    try {
+      const invitesRes = await axios.get(`${API}/invites`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      setInvites(invitesRes.data.slice(0, 3));
+    } catch (e) {
+      console.error("Error fetching invites:", e);
     }
   };
 
@@ -132,6 +173,15 @@ const BartenderDashboard = () => {
           {/* Quick Actions */}
           <div className="flex gap-3 mt-6">
             <Button 
+              onClick={() => navigate(`/b/${user.username}`)}
+              variant="outline"
+              className="flex-1 border-white/20 text-white hover:bg-white/5"
+              data-testid="view-profile-btn"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              View Profile
+            </Button>
+            <Button 
               onClick={() => setShowQR(!showQR)}
               variant="outline"
               className="flex-1 border-white/20 text-white hover:bg-white/5"
@@ -147,7 +197,7 @@ const BartenderDashboard = () => {
               data-testid="copy-link-btn"
             >
               <Copy className="w-4 h-4 mr-2" />
-              Copy Link
+              Share
             </Button>
           </div>
 
@@ -167,15 +217,75 @@ const BartenderDashboard = () => {
         </div>
 
         {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => navigate("/followers")}
+            className="glass-card-hover p-6 text-left"
+            data-testid="followers-card"
+          >
+            <Users className="w-8 h-8 text-primary mb-3" />
+            <p className="text-3xl font-bold text-white">{stats.followers}</p>
+            <p className="text-white/60 text-sm">Followers</p>
+          </button>
+          <button 
+            onClick={() => navigate("/followers?tab=following")}
+            className="glass-card-hover p-6 text-left"
+            data-testid="following-card"
+          >
+            <Users className="w-8 h-8 text-secondary mb-3" />
+            <p className="text-3xl font-bold text-white">{stats.following}</p>
+            <p className="text-white/60 text-sm">Following</p>
+          </button>
+        </div>
+
+        {/* Invites Card */}
         <button 
-          onClick={() => navigate("/followers")}
-          className="glass-card-hover p-6 text-left w-full"
-          data-testid="followers-card"
+          onClick={() => navigate("/invites")}
+          className="glass-card-hover p-6 w-full text-left"
+          data-testid="invites-btn"
         >
-          <Users className="w-8 h-8 text-primary mb-3" />
-          <p className="text-3xl font-bold text-white">{stats.followers}</p>
-          <p className="text-white/60 text-sm">Followers</p>
+          <div className="flex items-center gap-4">
+            <Calendar className="w-8 h-8 text-primary" />
+            <div>
+              <p className="text-white font-medium">Invites</p>
+              <p className="text-white/50 text-sm">Plan meetups</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-white/40 ml-auto" />
+          </div>
         </button>
+
+        {/* Upcoming Invites */}
+        {invites.length > 0 && (
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-secondary" />
+                Upcoming Invites
+              </h2>
+              <button 
+                onClick={() => navigate("/invites")}
+                className="text-primary text-sm flex items-center gap-1 hover:underline"
+              >
+                View All <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {invites.map((invite) => (
+                <div key={invite.id} className="p-4 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-white font-medium">{invite.location_name}</p>
+                      <p className="text-white/60 text-sm">{invite.datetime_str}</p>
+                    </div>
+                    <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                      {invite.creator_id === user.id ? "YOUR INVITE" : "INVITED"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Payment Links */}
         <div className="glass-card p-6">
@@ -186,7 +296,7 @@ const BartenderDashboard = () => {
           <div className="space-y-3">
             {user.venmo_link ? (
               <a 
-                href={user.venmo_link}
+                href={getVenmoUrl(user.venmo_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
@@ -197,7 +307,7 @@ const BartenderDashboard = () => {
             ) : null}
             {user.cashapp_link ? (
               <a 
-                href={user.cashapp_link}
+                href={getCashAppUrl(user.cashapp_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
@@ -208,7 +318,7 @@ const BartenderDashboard = () => {
             ) : null}
             {user.paypal_link ? (
               <a 
-                href={user.paypal_link}
+                href={getPayPalUrl(user.paypal_link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"

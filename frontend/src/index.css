@@ -33,6 +33,89 @@
     --chart-5: 0 0% 20%;
   }
 
+  /* Light Mode */
+  [data-theme="light"] {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 43 80% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 352 43% 35%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 43 80% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 85%;
+    --input: 0 0% 85%;
+    --ring: 43 80% 40%;
+  }
+
+  [data-theme="light"] body {
+    background-color: #fafafa;
+    background-image: none;
+  }
+
+  [data-theme="light"] .glass-card {
+    @apply bg-white/80 border-gray-200 shadow-lg;
+  }
+
+  [data-theme="light"] .glass-card-hover {
+    @apply bg-white/80 border-gray-200 shadow-lg hover:border-primary/50;
+  }
+
+  [data-theme="light"] .input-dark {
+    @apply bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-400;
+  }
+
+  [data-theme="light"] .text-white {
+    color: #1a1a1a !important;
+  }
+
+  [data-theme="light"] .text-white\/80 {
+    color: rgba(26, 26, 26, 0.8) !important;
+  }
+
+  [data-theme="light"] .text-white\/70 {
+    color: rgba(26, 26, 26, 0.7) !important;
+  }
+
+  [data-theme="light"] .text-white\/60 {
+    color: rgba(26, 26, 26, 0.6) !important;
+  }
+
+  [data-theme="light"] .text-white\/50 {
+    color: rgba(26, 26, 26, 0.5) !important;
+  }
+
+  [data-theme="light"] .text-white\/40 {
+    color: rgba(26, 26, 26, 0.4) !important;
+  }
+
+  [data-theme="light"] .border-white\/10,
+  [data-theme="light"] .border-white\/20 {
+    border-color: rgba(0, 0, 0, 0.1) !important;
+  }
+
+  [data-theme="light"] .bg-white\/5,
+  [data-theme="light"] .bg-white\/10 {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+  }
+
+  [data-theme="light"] .hover\:bg-white\/5:hover,
+  [data-theme="light"] .hover\:bg-white\/10:hover {
+    background-color: rgba(0, 0, 0, 0.08) !important;
+  }
+
+  [data-theme="light"] .bg-black\/40 {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+  }
+
   * {
     @apply border-border;
   }

@@ -31,7 +31,8 @@ const AuthPage = () => {
     try {
       const user = await login(loginForm.identifier, loginForm.password);
       toast.success(`Welcome back, ${user.name}!`);
-      navigate(user.role === "bartender" ? "/dashboard" : "/home");
+      // Navigation will be handled by AuthRedirect component after user state updates
+      // Don't navigate here - let the route change handle it
     } catch (e) {
       toast.error(e.response?.data?.detail || "Login failed");
     } finally {
@@ -53,9 +54,17 @@ const AuthPage = () => {
     try {
       const user = await register({ ...registerForm, role });
       toast.success(`Welcome to PourCircle, ${user.name}!`);
-      navigate(user.role === "bartender" ? "/dashboard" : "/home");
+      // Navigation will be handled by AuthRedirect component after user state updates
+      // Don't navigate here - let the route change handle it
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Registration failed");
+      if (e.response?.data?.detail) {
+        toast.error(e.response.data.detail);
+      } else if (e.code === 'ERR_NETWORK' || !navigator.onLine) {
+        toast.error("Network error. Please check your internet connection and try again.");
+      } else {
+        toast.error("Registration failed. Please try again.");
+      }
+      console.error("Registration error:", e);
     } finally {
       setLoading(false);
     }
@@ -144,6 +153,15 @@ const AuthPage = () => {
                     >
                       {loading ? "Signing in..." : "Sign In"}
                     </Button>
+                    <div className="text-center">
+                      <Link 
+                        to="/forgot-password" 
+                        className="text-primary text-sm hover:underline"
+                        data-testid="forgot-password-link"
+                      >
+                        Forgot your password?
+                      </Link>
+                    </div>
                   </form>
                 </TabsContent>
 

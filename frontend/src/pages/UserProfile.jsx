@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, WEB_URL } from "../App";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import BottomNav from "../components/BottomNav";
 import { 
   MapPin, Clock, Users, QrCode, DollarSign, 
-  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine
+  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Wine, ShieldBan, Flag
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,8 +20,35 @@ const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(null); // 'followers' or 'following'
+  const [followersList, setFollowersList] = useState([]);
+  const [followingList, setFollowingList] = useState([]);
+  const [tabLoading, setTabLoading] = useState(false);
 
-  const profileUrl = `${window.location.origin}/u/${username}`;
+  const profileUrl = `${WEB_URL}/u/${username}`;
+
+  // Helper functions to construct payment URLs from usernames
+  const getVenmoUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('@', '');
+    return `https://venmo.com/u/${cleanUsername}`;
+  };
+
+  const getCashAppUrl = (username) => {
+    if (!username) return null;
+    const cleanUsername = username.replace('$', '');
+    return `https://cash.app/$${cleanUsername}`;
+  };
+
+  const getPayPalUrl = (username) => {
+    if (!username) return null;
+    return `https://paypal.me/${username}`;
+  };
 
   useEffect(() => {
     fetchProfile();
@@ -44,9 +71,31 @@ const UserProfile = () => {
     }
   };
 
+  const fetchTabData = async (tab) => {
+    if (activeTab === tab) {
+      setActiveTab(null);
+      return;
+    }
+    setTabLoading(true);
+    setActiveTab(tab);
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${API}/user/${username}/${tab}`, { headers });
+      if (tab === 'followers') {
+        setFollowersList(response.data);
+      } else {
+        setFollowingList(response.data);
+      }
+    } catch (e) {
+      toast.error(`Failed to load ${tab}`);
+    } finally {
+      setTabLoading(false);
+    }
+  };
+
   const handleFollow = async () => {
     if (!user) {
-      navigate("/auth");
+      navigate(`/auth?redirect=/u/${username}`);
       return;
     }
     setFollowLoading(true);
@@ -88,6 +137,45 @@ const UserProfile = () => {
     }
   };
 
+  const handleBlock = async () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    setBlockLoading(true);
+    try {
+      await axios.post(`${API}/block/${profile.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("User blocked");
+      navigate(-1);
+    } catch (e) {
+      toast.error("Failed to block user");
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!reportReason) {
+      toast.error("Please select a reason");
+      return;
+    }
+    setReportLoading(true);
+    try {
+      await axios.post(`${API}/report/${profile.id}`, 
+        { reason: reportReason, details: reportDetails },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Report submitted. Thank you for helping keep PourCircle safe.");
+      setShowReportModal(false);
+      setReportReason("");
+      setReportDetails("");
+    } catch (e) {
+      toast.error("Failed to submit report");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   const getImageUrl = (path) => {
     if (!path) return null;
     return token ? `${API}/files/${path}?auth=${token}` : `${API}/files/${path}`;
@@ -109,7 +197,16 @@ const UserProfile = () => {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/60">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   const isBartender = profile.role === "bartender";
   const isOwnProfile = user?.id === profile.id;
@@ -166,13 +263,21 @@ const UserProfile = () => {
             </h1>
             <p className="text-white/60">@{profile.username}</p>
             <div className="flex items-center gap-3 mt-2">
-              <span className="flex items-center gap-1 text-white/60 text-sm">
+              <button 
+                onClick={() => fetchTabData('followers')}
+                className={`flex items-center gap-1 text-sm transition-colors ${activeTab === 'followers' ? 'text-primary' : 'text-white/60 hover:text-white'}`}
+                data-testid="followers-tab-btn"
+              >
                 <Users className="w-4 h-4 text-primary" />
                 {profile.follower_count} followers
-              </span>
-              <span className="flex items-center gap-1 text-white/60 text-sm">
+              </button>
+              <button 
+                onClick={() => fetchTabData('following')}
+                className={`flex items-center gap-1 text-sm transition-colors ${activeTab === 'following' ? 'text-primary' : 'text-white/60 hover:text-white'}`}
+                data-testid="following-tab-btn"
+              >
                 {profile.following_count} following
-              </span>
+              </button>
             </div>
             <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
               isBartender ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary'
@@ -205,7 +310,89 @@ const UserProfile = () => {
               )}
             </Button>
           )}
+          {user && !isOwnProfile && (
+            <Button 
+              onClick={handleBlock}
+              disabled={blockLoading}
+              size="sm"
+              variant="ghost"
+              className="text-red-400 hover:text-red-300 hover:bg-red-400/10 ml-2"
+              data-testid="block-btn"
+              title="Block user"
+            >
+              {blockLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ShieldBan className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+          {user && !isOwnProfile && (
+            <Button 
+              onClick={() => setShowReportModal(true)}
+              size="sm"
+              variant="ghost"
+              className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10"
+              data-testid="report-btn"
+              title="Report user"
+            >
+              <Flag className="w-4 h-4" />
+            </Button>
+          )}
         </div>
+
+        {/* Followers/Following List */}
+        {activeTab && (
+          <div className="glass-card p-4" data-testid="followers-following-list">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white font-semibold capitalize">{activeTab}</h3>
+              <button 
+                onClick={() => setActiveTab(null)} 
+                className="text-white/40 hover:text-white text-sm"
+              >
+                Close
+              </button>
+            </div>
+            {tabLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {(activeTab === 'followers' ? followersList : followingList).length > 0 ? (
+                  (activeTab === 'followers' ? followersList : followingList).map((person) => (
+                    <button
+                      key={person.id}
+                      onClick={() => navigate(`/u/${person.username}`)}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                      data-testid={`${activeTab}-item-${person.username}`}
+                    >
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={getImageUrl(person.profile_image)} />
+                        <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                          {getInitials(person.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="text-left">
+                        <p className="text-white font-medium text-sm">{person.name}</p>
+                        <p className="text-white/50 text-xs">@{person.username}</p>
+                      </div>
+                      <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
+                        person.role === 'bartender' ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary'
+                      }`}>
+                        {person.role === 'bartender' ? 'Bartender' : 'Bar-Goer'}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-white/40 text-sm text-center py-4">
+                    {activeTab === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Bio */}
         {profile.bio && (
@@ -244,7 +431,7 @@ const UserProfile = () => {
                 <div className="space-y-2">
                   {profile.venmo_link && (
                     <a 
-                      href={profile.venmo_link}
+                      href={getVenmoUrl(profile.venmo_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-lg bg-[#008CFF]/10 border border-[#008CFF]/30 hover:bg-[#008CFF]/20 transition-colors"
@@ -256,7 +443,7 @@ const UserProfile = () => {
                   )}
                   {profile.cashapp_link && (
                     <a 
-                      href={profile.cashapp_link}
+                      href={getCashAppUrl(profile.cashapp_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-lg bg-[#00D632]/10 border border-[#00D632]/30 hover:bg-[#00D632]/20 transition-colors"
@@ -268,7 +455,7 @@ const UserProfile = () => {
                   )}
                   {profile.paypal_link && (
                     <a 
-                      href={profile.paypal_link}
+                      href={getPayPalUrl(profile.paypal_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-lg bg-[#0070BA]/10 border border-[#0070BA]/30 hover:bg-[#0070BA]/20 transition-colors"
@@ -376,15 +563,77 @@ const UserProfile = () => {
         {/* Login CTA for non-users */}
         {!user && (
           <div className="glass-card p-5 text-center">
-            <p className="text-white/60 mb-3 text-sm">Sign up to follow and message this user</p>
-            <Button onClick={() => navigate("/auth")} className="btn-primary">
-              Join PourCircle
+            <p className="text-white/60 mb-3 text-sm">Sign up or login to follow this user</p>
+            <Button 
+              onClick={() => {
+                navigate(`/auth?redirect=/u/${username}`);
+              }} 
+              className="btn-primary"
+            >
+              Login / Sign Up
             </Button>
           </div>
         )}
       </main>
 
       {user && <BottomNav />}
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-md border border-white/10">
+            <h3 className="text-xl font-bold text-white mb-4">Report User</h3>
+            <p className="text-white/60 text-sm mb-4">
+              Why are you reporting @{profile.username}?
+            </p>
+            
+            <div className="space-y-2 mb-4">
+              {["Harassment or bullying", "Spam or fake profile", "Inappropriate content", "Impersonation", "Other"].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setReportReason(reason)}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    reportReason === reason 
+                      ? "border-primary bg-primary/10 text-white" 
+                      : "border-white/10 text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              placeholder="Additional details (optional)"
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 mb-4 resize-none"
+              rows={3}
+            />
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportReason("");
+                  setReportDetails("");
+                }}
+                variant="outline"
+                className="flex-1 border-white/20 text-white"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReport}
+                disabled={reportLoading || !reportReason}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit Report"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

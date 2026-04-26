@@ -4,6 +4,8 @@ from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from contextlib import asynccontextmanager
+import asyncio
 import os
 import logging
 from pathlib import Path
@@ -14,19 +16,173 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import requests
+import secrets
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# Initialize Firebase Admin SDK
+firebase_cred_path = ROOT_DIR / 'firebase-admin.json'
+if firebase_cred_path.exists():
+    cred = credentials.Certificate(str(firebase_cred_path))
+    firebase_admin.initialize_app(cred)
+    firebase_initialized = True
+else:
+    firebase_initialized = False
+    logging.warning("Firebase Admin SDK credentials not found. Push notifications disabled.")
+
+# MongoDB connection with health tracking
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db_name = os.environ['DB_NAME']
+client = None
+db = None
+db_healthy = False
+last_health_check = None
+health_check_interval = 15  # seconds - check every 15 seconds for faster detection
+
+async def init_mongodb():
+    """Initialize MongoDB connection with proper settings"""
+    global client, db, db_healthy
+    try:
+        client = AsyncIOMotorClient(
+            mongo_url,
+            serverSelectionTimeoutMS=5000,  # 5 second timeout for server selection
+            connectTimeoutMS=5000,           # 5 second connection timeout
+            socketTimeoutMS=10000,           # 10 second socket timeout
+            maxPoolSize=50,                  # Connection pool size
+            minPoolSize=10,                  # Keep more minimum connections alive
+            maxIdleTimeMS=30000,             # Close idle connections after 30 seconds (was 60)
+            retryWrites=True,                # Retry failed writes
+            retryReads=True,                 # Retry failed reads
+            heartbeatFrequencyMS=10000,      # Check server health every 10 seconds
+        )
+        db = client[db_name]
+        # Test the connection
+        await client.admin.command('ping')
+        db_healthy = True
+        logger.info("MongoDB connection initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"MongoDB initialization failed: {e}")
+        db_healthy = False
+        return False
+
+async def check_db_health():
+    """Check if MongoDB connection is healthy"""
+    global db_healthy, last_health_check
+    try:
+        # Ping the database
+        await client.admin.command('ping')
+        # Also do a quick read test
+        await db.users.find_one({}, {"_id": 1})
+        db_healthy = True
+        last_health_check = datetime.now(timezone.utc)
+        return True
+    except Exception as e:
+        logger.error(f"MongoDB health check failed: {e}")
+        db_healthy = False
+        return False
+
+async def reconnect_mongodb():
+    """Attempt to reconnect to MongoDB"""
+    global client, db, db_healthy
+    logger.warning("Attempting MongoDB reconnection...")
+    try:
+        if client:
+            client.close()
+    except:
+        pass
+    return await init_mongodb()
+
+async def db_operation_with_retry(operation, max_retries=2):
+    """Execute a database operation with automatic retry and reconnection on failure"""
+    global db_healthy
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            result = await operation()
+            return result
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Database operation failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+            
+            if attempt < max_retries:
+                # Try to reconnect
+                logger.info("Attempting automatic reconnection...")
+                reconnected = await reconnect_mongodb()
+                if reconnected:
+                    logger.info("Reconnection successful, retrying operation...")
+                else:
+                    logger.error("Reconnection failed")
+            
+    # All retries exhausted
+    logger.error(f"Database operation failed after {max_retries + 1} attempts: {last_error}")
+    raise last_error
+
+async def health_monitor():
+    """Background task to monitor database health"""
+    global db_healthy
+    while True:
+        try:
+            await asyncio.sleep(health_check_interval)
+            is_healthy = await check_db_health()
+            if not is_healthy:
+                logger.warning("Database unhealthy, attempting reconnection...")
+                reconnected = await reconnect_mongodb()
+                if reconnected:
+                    logger.info("MongoDB reconnection successful")
+                else:
+                    logger.error("MongoDB reconnection failed")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Health monitor error: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifecycle - startup and shutdown"""
+    # Startup
+    logger.info("Starting SipCircle API...")
+    await init_mongodb()
+    init_storage()
+    
+    # Create indexes
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("username", unique=True)
+        await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
+        await db.invites.create_index("creator_id")
+        logger.info("Database indexes created")
+    except Exception as e:
+        logger.warning(f"Index creation warning (may already exist): {e}")
+    
+    # Start background health monitor
+    health_task = asyncio.create_task(health_monitor())
+    logger.info(f"Background health monitor started (checks every {health_check_interval} seconds)")
+    logger.info("SipCircle API started successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down SipCircle API...")
+    health_task.cancel()
+    try:
+        await health_task
+    except asyncio.CancelledError:
+        pass
+    if client:
+        client.close()
+    logger.info("MongoDB connection closed")
 
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'sipcircle-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = 480  # 20 days - users stay logged in longer
 
 # Object Storage Config
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
@@ -34,8 +190,84 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 APP_NAME = "sipcircle"
 storage_key = None
 
-# Create the main app
-app = FastAPI(title="SipCircle API")
+# SendGrid Config
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "admin@pourcircle.net")
+FRONTEND_URL = os.environ.get("FRONTEND_URL")
+
+def send_password_reset_email(to_email: str, reset_token: str, user_name: str):
+    """Send password reset email via SendGrid"""
+    if not SENDGRID_API_KEY:
+        logger.error("SendGrid API key not configured")
+        raise HTTPException(status_code=503, detail="Email service not configured")
+    
+    reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #0a0a0a; color: #ffffff; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background-color: #1a1a1a; border-radius: 12px; padding: 40px; }}
+            .logo {{ text-align: center; margin-bottom: 30px; }}
+            .logo h1 {{ color: #d4af37; font-size: 28px; margin: 0; }}
+            h2 {{ color: #ffffff; margin-bottom: 20px; }}
+            p {{ color: #cccccc; line-height: 1.6; }}
+            .button {{ display: inline-block; background-color: #d4af37; color: #000000; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }}
+            .button:hover {{ background-color: #b8962e; }}
+            .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; color: #888; font-size: 12px; }}
+            .warning {{ background-color: #2a2a2a; padding: 15px; border-radius: 8px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">
+                <h1>🍸 PourCircle</h1>
+            </div>
+            <h2>Reset Your Password</h2>
+            <p>Hi {user_name},</p>
+            <p>We received a request to reset your password for your PourCircle account. Click the button below to create a new password:</p>
+            <p style="text-align: center;">
+                <a href="{reset_link}" class="button">Reset Password</a>
+            </p>
+            <div class="warning">
+                <p><strong>Important:</strong></p>
+                <ul style="color: #cccccc;">
+                    <li>This link will expire in 1 hour</li>
+                    <li>If you didn't request this, you can safely ignore this email</li>
+                    <li>Your password won't change until you create a new one</li>
+                </ul>
+            </div>
+            <p>If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #d4af37; font-size: 12px;">{reset_link}</p>
+            <div class="footer">
+                <p>This email was sent by PourCircle. If you have any questions, contact us at support@pourcircle.net</p>
+                <p>© 2026 PourCircle. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    message = Mail(
+        from_email=SENDER_EMAIL,
+        to_emails=to_email,
+        subject="Reset Your PourCircle Password",
+        html_content=html_content
+    )
+    
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        logger.info(f"Password reset email sent to {to_email}, status: {response.status_code}")
+        return response.status_code == 202
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {e}")
+        raise HTTPException(status_code=503, detail="Failed to send email")
+
+# Create the main app with lifespan management
+app = FastAPI(title="SipCircle API", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -97,6 +329,17 @@ class LoginRequest(BaseModel):
     identifier: str  # Can be email or username
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class AuthResponse(BaseModel):
     token: str
     user: dict
@@ -124,11 +367,13 @@ class BartenderProfileUpdate(BaseModel):
     paypal_link: Optional[str] = None
     work_locations: Optional[List[WorkLocation]] = None
     require_follow_approval: Optional[bool] = None
+    followers_visibility: Optional[str] = None  # "everyone", "followers", "only_me"
 
 class CustomerProfileUpdate(BaseModel):
     name: Optional[str] = None
     bio: Optional[str] = None
     require_follow_approval: Optional[bool] = None
+    followers_visibility: Optional[str] = None  # "everyone", "followers", "only_me"
 
 class MessageCreate(BaseModel):
     recipient_id: str
@@ -142,7 +387,94 @@ class InviteCreate(BaseModel):
     datetime_str: str
     message: Optional[str] = None
 
+# ===================== VENUE MODELS =====================
+class VenueMenu(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # "Lunch", "Dinner", "Happy Hour", etc.
+    menu_type: str = "link"  # "link" or "manual"
+    url: Optional[str] = None  # For link type
+    items: Optional[List[dict]] = []  # For manual type: [{name, description, price}]
+
+class VenueHours(BaseModel):
+    day: str
+    open_time: str
+    close_time: str
+    is_closed: bool = False
+
+class VenueLocation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # "Downtown", "Uptown", etc.
+    address: str
+    zip_code: str
+    phone: Optional[str] = None
+    hours: List[VenueHours] = []
+    menus: List[VenueMenu] = []  # Can override master menus
+    stars: List[str] = []  # Bartender user IDs
+    followers: List[str] = []
+    qr_code_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class VenueCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+class VenueUpdate(BaseModel):
+    name: Optional[str] = None
+    logo: Optional[str] = None
+    menus: Optional[List[VenueMenu]] = None
+    hours: Optional[List[VenueHours]] = None
+
+class VenueLocationCreate(BaseModel):
+    name: str
+    address: str
+    zip_code: str
+    phone: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class VenueLocationUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    zip_code: Optional[str] = None
+    phone: Optional[str] = None
+    hours: Optional[List[dict]] = None
+    menus: Optional[List[dict]] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class VendorLoginRequest(BaseModel):
+    identifier: str  # email or username
+    password: str
+
+class DeviceTokenRequest(BaseModel):
+    token: str
+    platform: str  # "ios" or "android"
+
+class VendorNotificationRequest(BaseModel):
+    title: str
+    body: str
+    location_id: Optional[str] = None  # If None, send to all followers (Master)
+
 # ===================== AUTH HELPERS =====================
+def validate_password(password: str) -> tuple[bool, str]:
+    """
+    Validate password meets minimum requirements:
+    - At least 8 characters
+    - At least 1 uppercase letter
+    - At least 1 number
+    Returns (is_valid, error_message)
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one number"
+    return True, ""
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -185,9 +517,66 @@ async def get_optional_user(authorization: str = Header(None), auth: str = Query
     except:
         return None
 
+# ===================== PUSH NOTIFICATION HELPERS =====================
+async def send_push_notification(user_ids: List[str], title: str, body: str, data: dict = None):
+    """Send push notification to multiple users"""
+    if not firebase_initialized:
+        logger.warning("Firebase not initialized, skipping push notification")
+        return {"sent": 0, "failed": 0}
+    
+    # Get device tokens for all users
+    users = await db.users.find(
+        {"id": {"$in": user_ids}, "device_tokens": {"$exists": True, "$ne": []}},
+        {"device_tokens": 1}
+    ).to_list(1000)
+    
+    tokens = []
+    for user in users:
+        for token_info in user.get("device_tokens", []):
+            tokens.append(token_info.get("token"))
+    
+    if not tokens:
+        logger.info(f"No device tokens found for {len(user_ids)} users")
+        return {"sent": 0, "failed": 0}
+    
+    # Send notifications
+    sent = 0
+    failed = 0
+    
+    for token in tokens:
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body
+                ),
+                data=data or {},
+                token=token
+            )
+            messaging.send(message)
+            sent += 1
+        except messaging.UnregisteredError:
+            # Token is no longer valid, remove it
+            await db.users.update_many(
+                {"device_tokens.token": token},
+                {"$pull": {"device_tokens": {"token": token}}}
+            )
+            failed += 1
+        except Exception as e:
+            logger.error(f"Push notification error: {e}")
+            failed += 1
+    
+    logger.info(f"Push notifications sent: {sent}, failed: {failed}")
+    return {"sent": sent, "failed": failed}
+
 # ===================== AUTH ROUTES =====================
 @api_router.post("/auth/register", response_model=AuthResponse)
 async def register(req: RegisterRequest):
+    # Validate password requirements
+    is_valid, error_msg = validate_password(req.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
     # Check existing
     if await db.users.find_one({"email": req.email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -213,7 +602,8 @@ async def register(req: RegisterRequest):
         "blocked_users": [],
         "follow_requests": [],
         "pending_follows": [],
-        "require_follow_approval": False
+        "require_follow_approval": False,
+        "followers_visibility": "everyone"  # Options: "everyone", "followers", "only_me"
     }
     
     if req.role == UserRole.BARTENDER:
@@ -231,24 +621,53 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login", response_model=AuthResponse)
 async def login(req: LoginRequest):
-    # Check if identifier is email or username
+    # Ensure database connection is fresh before login attempt
+    try:
+        await client.admin.command('ping')
+    except Exception as e:
+        logger.warning(f"Pre-login ping failed, reconnecting: {e}")
+        await reconnect_mongodb()
+    
+    # Log raw request data for debugging
+    logger.info(f"Login attempt - raw identifier: '{req.identifier}', password length: {len(req.password) if req.password else 0}")
+    
+    # Check if identifier is email or username (case-insensitive)
     identifier = req.identifier.lower().strip()
+    logger.info(f"Login attempt for identifier: '{identifier}'")
     
-    # Try to find by email first, then by username
-    if "@" in identifier:
-        user = await db.users.find_one({"email": identifier}, {"_id": 0})
-    else:
-        user = await db.users.find_one({"username": identifier}, {"_id": 0})
+    async def find_user():
+        # Try to find by email first, then by username (case-insensitive)
+        if "@" in identifier:
+            user = await db.users.find_one({"email": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
+        else:
+            user = await db.users.find_one({"username": {"$regex": f"^{identifier}$", "$options": "i"}}, {"_id": 0})
+        
+        # If not found by the assumed type, try the other
+        if not user:
+            user = await db.users.find_one(
+                {"$or": [
+                    {"email": {"$regex": f"^{identifier}$", "$options": "i"}}, 
+                    {"username": {"$regex": f"^{identifier}$", "$options": "i"}}
+                ]}, 
+                {"_id": 0}
+            )
+        return user
     
-    # If not found by the assumed type, try the other
+    try:
+        user = await db_operation_with_retry(find_user)
+    except Exception as e:
+        logger.error(f"Database error during login: {e}")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable. Please try again.")
+    
     if not user:
-        user = await db.users.find_one(
-            {"$or": [{"email": identifier}, {"username": identifier}]}, 
-            {"_id": 0}
-        )
-    
-    if not user or not verify_password(req.password, user["password_hash"]):
+        logger.warning(f"Login failed: User not found for identifier '{identifier}'")
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not verify_password(req.password, user["password_hash"]):
+        logger.warning(f"Login failed: Invalid password for user '{user.get('username')}'")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    logger.info(f"Login successful for user: {user.get('username')}")
     
     user_response = {k: v for k, v in user.items() if k != "password_hash"}
     token = create_token(user["id"])
@@ -257,6 +676,151 @@ async def login(req: LoginRequest):
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
     return {k: v for k, v in user.items() if k != "password_hash"}
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    """Send password reset email"""
+    # Find user by email (case-insensitive)
+    user = await db.users.find_one(
+        {"email": {"$regex": f"^{req.email}$", "$options": "i"}}, 
+        {"_id": 0}
+    )
+    
+    # Always return success to prevent email enumeration attacks
+    if not user:
+        logger.info(f"Password reset requested for non-existent email: {req.email}")
+        return {"message": "If an account exists with this email, you will receive a password reset link."}
+    
+    # Generate secure reset token
+    reset_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store reset token in database
+    await db.password_resets.delete_many({"user_id": user["id"]})  # Remove old tokens
+    await db.password_resets.insert_one({
+        "user_id": user["id"],
+        "token": reset_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Send email
+    try:
+        send_password_reset_email(user["email"], reset_token, user.get("name", user["username"]))
+    except Exception as e:
+        logger.error(f"Failed to send reset email: {e}")
+        raise HTTPException(status_code=503, detail="Failed to send email. Please try again later.")
+    
+    return {"message": "If an account exists with this email, you will receive a password reset link."}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    """Reset password using token from email"""
+    # Find the reset token
+    reset_record = await db.password_resets.find_one({"token": req.token}, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    
+    # Check if token is expired
+    expires_at = datetime.fromisoformat(reset_record["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.password_resets.delete_one({"token": req.token})
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+    
+    # Validate new password
+    is_valid, error_msg = validate_password(req.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Update user's password
+    new_hash = hash_password(req.new_password)
+    result = await db.users.update_one(
+        {"id": reset_record["user_id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Failed to update password")
+    
+    # Delete the used reset token
+    await db.password_resets.delete_one({"token": req.token})
+    
+    logger.info(f"Password reset successful for user: {reset_record['user_id']}")
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+@api_router.get("/auth/verify-reset-token")
+async def verify_reset_token(token: str):
+    """Verify if a reset token is valid (for frontend validation)"""
+    reset_record = await db.password_resets.find_one({"token": token}, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Invalid reset link")
+    
+    expires_at = datetime.fromisoformat(reset_record["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.password_resets.delete_one({"token": token})
+        raise HTTPException(status_code=400, detail="Reset link has expired")
+    
+    return {"valid": True}
+
+@api_router.post("/auth/change-password")
+async def change_password(req: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    """Change password for logged-in user"""
+    # Verify current password
+    if not verify_password(req.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    is_valid, error_msg = validate_password(req.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Check new password is different from current
+    if req.current_password == req.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+    
+    # Update password
+    new_hash = hash_password(req.new_password)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    logger.info(f"Password changed for user: {user['username']}")
+    return {"message": "Password changed successfully"}
+
+# ===================== DEVICE TOKEN & NOTIFICATION ROUTES =====================
+@api_router.post("/device-token")
+async def register_device_token(req: DeviceTokenRequest, user: dict = Depends(get_current_user)):
+    """Register device token for push notifications"""
+    token_entry = {
+        "token": req.token,
+        "platform": req.platform,
+        "registered_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Remove old entry with same token (if exists) and add new one
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$pull": {"device_tokens": {"token": req.token}}}
+    )
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$push": {"device_tokens": token_entry}}
+    )
+    
+    logger.info(f"Device token registered for user {user['username']} ({req.platform})")
+    return {"success": True}
+
+@api_router.delete("/device-token")
+async def unregister_device_token(req: DeviceTokenRequest, user: dict = Depends(get_current_user)):
+    """Unregister device token (e.g., on logout)"""
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$pull": {"device_tokens": {"token": req.token}}}
+    )
+    return {"success": True}
 
 # ===================== PROFILE ROUTES =====================
 @api_router.put("/profile/bartender")
@@ -305,7 +869,7 @@ async def get_file(path: str, user: dict = Depends(get_optional_user)):
     try:
         data, content_type = get_object(path)
         return Response(content=data, media_type=content_type)
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=404, detail="File not found")
 
 # ===================== USER DISCOVERY =====================
@@ -351,9 +915,95 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     is_pending = user and user["id"] in bartender.get("follow_requests", [])
     bartender["is_following"] = is_following
     bartender["is_pending"] = is_pending
-    bartender["follower_count"] = len(bartender.get("followers", []))
+    
+    # Count only existing followers (not deleted users)
+    follower_ids = bartender.get("followers", [])
+    if follower_ids:
+        existing_followers = await db.users.count_documents({"id": {"$in": follower_ids}})
+        bartender["follower_count"] = existing_followers
+    else:
+        bartender["follower_count"] = 0
+    
+    # Following count includes both users and venues
+    following_users_count = len(bartender.get("following", []))
+    following_venues_count = len(bartender.get("following_venues", []))
+    bartender["following_count"] = following_users_count + following_venues_count
+    bartender["following_users_count"] = following_users_count
+    bartender["following_venues_count"] = following_venues_count
     
     return bartender
+
+@api_router.get("/bartender/{username}/venues")
+async def get_bartender_venues(username: str, user: dict = Depends(get_optional_user)):
+    """Get venues where the bartender is linked as a Star"""
+    # First find the bartender
+    bartender = await db.users.find_one(
+        {"username": {"$regex": f"^{username}$", "$options": "i"}, "role": UserRole.BARTENDER},
+        {"_id": 0, "id": 1}
+    )
+    if not bartender:
+        raise HTTPException(status_code=404, detail="Bartender not found")
+    
+    bartender_id = bartender["id"]
+    
+    # Find all venue locations where this bartender is a star
+    locations = await db.venue_locations.find(
+        {"stars": bartender_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    if not locations:
+        return []
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations if loc.get("venue_id")]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        results.append({
+            "id": loc.get("id"),
+            "name": loc.get("name"),
+            "address": loc.get("address"),
+            "venue_id": loc.get("venue_id"),
+            "venue_name": venue.get("name"),
+            "venue_logo": venue.get("logo"),
+            "follower_count": len(loc.get("followers", [])),
+            "is_following": user["id"] in loc.get("followers", []) if user else False
+        })
+    
+    return results
+
+@api_router.get("/user/following-venues")
+async def get_following_venues(user: dict = Depends(get_current_user)):
+    """Get list of venues the user is following"""
+    following_venue_ids = user.get("following_venues", [])
+    
+    if not following_venue_ids:
+        return []
+    
+    locations = await db.venue_locations.find(
+        {"id": {"$in": following_venue_ids}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations if loc.get("venue_id")]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        results.append({
+            **loc,
+            "venue_name": venue.get("name"),
+            "venue_logo": venue.get("logo")
+        })
+    
+    return results
 
 @api_router.get("/user/{username}")
 async def get_user_profile(username: str, user: dict = Depends(get_optional_user)):
@@ -370,8 +1020,21 @@ async def get_user_profile(username: str, user: dict = Depends(get_optional_user
     is_pending = user and user["id"] in profile.get("follow_requests", [])
     profile["is_following"] = is_following
     profile["is_pending"] = is_pending
-    profile["follower_count"] = len(profile.get("followers", []))
-    profile["following_count"] = len(profile.get("following", []))
+    
+    # Count only existing followers (not deleted users)
+    follower_ids = profile.get("followers", [])
+    if follower_ids:
+        existing_followers = await db.users.count_documents({"id": {"$in": follower_ids}})
+        profile["follower_count"] = existing_followers
+    else:
+        profile["follower_count"] = 0
+    
+    # Following count includes both users and venues
+    following_users_count = len(profile.get("following", []))
+    following_venues_count = len(profile.get("following_venues", []))
+    profile["following_count"] = following_users_count + following_venues_count
+    profile["following_users_count"] = following_users_count
+    profile["following_venues_count"] = following_venues_count
     
     return profile
 
@@ -459,6 +1122,66 @@ async def get_followers(user: dict = Depends(get_current_user)):
 async def get_following(user: dict = Depends(get_current_user)):
     following_ids = user.get("following", [])
     following = await db.users.find({"id": {"$in": following_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return following
+
+@api_router.get("/user/{username}/followers")
+async def get_user_followers(username: str, current_user: dict = Depends(get_optional_user)):
+    """Get followers list for any user by username"""
+    profile = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if current user is blocked
+    if current_user and current_user["id"] in profile.get("blocked_users", []):
+        raise HTTPException(status_code=403, detail="You are blocked by this user")
+    
+    # Check followers_visibility setting
+    visibility = profile.get("followers_visibility", "everyone")
+    is_own_profile = current_user and current_user["id"] == profile["id"]
+    is_follower = current_user and current_user["id"] in profile.get("followers", [])
+    
+    # Privacy check based on visibility setting
+    if not is_own_profile:
+        if visibility == "only_me":
+            return []
+        elif visibility == "followers" and not is_follower:
+            return []
+    
+    follower_ids = profile.get("followers", [])
+    followers = await db.users.find(
+        {"id": {"$in": follower_ids}}, 
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).to_list(1000)
+    return followers
+
+@api_router.get("/user/{username}/following")
+async def get_user_following(username: str, current_user: dict = Depends(get_optional_user)):
+    """Get following list for any user by username"""
+    profile = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if current user is blocked
+    if current_user and current_user["id"] in profile.get("blocked_users", []):
+        raise HTTPException(status_code=403, detail="You are blocked by this user")
+    
+    # Check followers_visibility setting
+    visibility = profile.get("followers_visibility", "everyone")
+    is_own_profile = current_user and current_user["id"] == profile["id"]
+    is_follower = current_user and current_user["id"] in profile.get("followers", [])
+    
+    # Privacy check based on visibility setting
+    if not is_own_profile:
+        if visibility == "only_me":
+            return []
+        elif visibility == "followers" and not is_follower:
+            return []
+    
+    following_ids = profile.get("following", [])
+    following = await db.users.find(
+        {"id": {"$in": following_ids}}, 
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).to_list(1000)
     return following
 
 # ===================== PEOPLE YOU MAY KNOW =====================
@@ -563,8 +1286,9 @@ async def get_people_you_may_know(user: dict = Depends(get_current_user)):
 # ===================== BLOCK SYSTEM =====================
 @api_router.post("/block/{user_id}")
 async def block_user(user_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] != UserRole.BARTENDER:
-        raise HTTPException(status_code=403, detail="Only bartenders can block users")
+    # All users (bartenders and bar-goers) can block other users
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
     
     await db.users.update_one({"id": user["id"]}, {"$addToSet": {"blocked_users": user_id}})
     # Also remove from followers
@@ -583,6 +1307,41 @@ async def get_blocked_users(user: dict = Depends(get_current_user)):
     blocked_ids = user.get("blocked_users", [])
     blocked = await db.users.find({"id": {"$in": blocked_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return blocked
+
+# ===================== REPORTING =====================
+class ReportCreate(BaseModel):
+    reason: str
+    details: Optional[str] = None
+
+@api_router.post("/report/{user_id}")
+async def report_user(user_id: str, report: ReportCreate, user: dict = Depends(get_current_user)):
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot report yourself")
+    
+    reported_user = await db.users.find_one({"id": user_id})
+    if not reported_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    report_entry = {
+        "id": str(uuid.uuid4()),
+        "reporter_id": user["id"],
+        "reporter_username": user.get("username"),
+        "reported_user_id": user_id,
+        "reported_username": reported_user.get("username"),
+        "reason": report.reason,
+        "details": report.details,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.reports.insert_one(report_entry)
+    return {"success": True, "message": "Report submitted. Thank you for helping keep PourCircle safe."}
+
+@api_router.get("/reports")
+async def get_reports(user: dict = Depends(get_current_user)):
+    # Only allow admins to view reports (for now, just return empty for regular users)
+    # In production, you'd check for admin role
+    return []
 
 # ===================== MESSAGING =====================
 @api_router.post("/messages")
@@ -687,6 +1446,18 @@ async def create_invite(invite: InviteCreate, user: dict = Depends(get_current_u
     }
     
     await db.invites.insert_one(invite_doc)
+    
+    # Send push notification to recipients
+    if invite.recipient_ids:
+        notification_title = f"{user['name']} invited you for drinks!"
+        notification_body = f"{invite.location_name} - {invite.datetime_str}"
+        asyncio.create_task(send_push_notification(
+            invite.recipient_ids,
+            notification_title,
+            notification_body,
+            {"type": "invite", "invite_id": invite_doc["id"]}
+        ))
+    
     return {"id": invite_doc["id"], "success": True}
 
 @api_router.get("/invites")
@@ -715,7 +1486,64 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    return {"status": "healthy", "storage": storage_key is not None}
+    """Basic health check - returns quickly"""
+    return {
+        "status": "healthy" if db_healthy else "degraded",
+        "storage": storage_key is not None,
+        "database": db_healthy
+    }
+
+@api_router.get("/health/detailed")
+async def health_detailed():
+    """Detailed health check - performs actual connectivity tests"""
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": {}
+    }
+    
+    # Check MongoDB
+    try:
+        start = datetime.now(timezone.utc)
+        await client.admin.command('ping')
+        # Test read operation
+        await db.users.find_one({}, {"_id": 1})
+        latency_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        health_status["checks"]["mongodb"] = {
+            "status": "healthy",
+            "latency_ms": round(latency_ms, 2),
+            "last_check": last_health_check.isoformat() if last_health_check else None
+        }
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["mongodb"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        logger.error(f"Health check - MongoDB unhealthy: {e}")
+    
+    # Check Storage
+    health_status["checks"]["storage"] = {
+        "status": "healthy" if storage_key else "unavailable",
+        "initialized": storage_key is not None
+    }
+    
+    # Overall status
+    if health_status["checks"]["mongodb"].get("status") != "healthy":
+        health_status["status"] = "unhealthy"
+    
+    return health_status
+
+@api_router.post("/health/reconnect")
+async def force_reconnect():
+    """Force a database reconnection - for admin use"""
+    logger.warning("Manual database reconnection requested")
+    success = await reconnect_mongodb()
+    return {
+        "success": success,
+        "database_healthy": db_healthy,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # ===================== DELETE ACCOUNT =====================
 @api_router.delete("/account")
@@ -753,6 +1581,912 @@ async def delete_account(user: dict = Depends(get_current_user)):
     
     return {"success": True, "message": "Account deleted"}
 
+# ===================== ADMIN ENDPOINTS =====================
+MASTER_ADMIN_USERNAMES = ["wbyrd123"]  # Master admins - cannot be revoked
+
+async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user = await get_current_user(credentials)
+    # Check if user is master admin or has is_admin flag
+    is_master = user.get("username") in MASTER_ADMIN_USERNAMES
+    is_db_admin = user.get("is_admin", False)
+    if not is_master and not is_db_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+@api_router.get("/admin/users")
+async def admin_get_users(admin: dict = Depends(get_admin_user)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    # Add is_master_admin flag for frontend
+    for user in users:
+        user["is_master_admin"] = user.get("username") in MASTER_ADMIN_USERNAMES
+    return users
+
+@api_router.get("/admin/users/{user_id}")
+async def admin_get_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user["is_master_admin"] = user.get("username") in MASTER_ADMIN_USERNAMES
+    return user
+
+@api_router.post("/admin/users/{user_id}/promote")
+async def admin_promote_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Promote a user to admin"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.update_one({"id": user_id}, {"$set": {"is_admin": True}})
+    logger.info(f"User {target_user.get('username')} promoted to admin by {admin.get('username')}")
+    return {"success": True, "message": f"@{target_user.get('username')} is now an admin"}
+
+@api_router.post("/admin/users/{user_id}/demote")
+async def admin_demote_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Remove admin access from a user"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot demote master admins
+    if target_user.get("username") in MASTER_ADMIN_USERNAMES:
+        raise HTTPException(status_code=400, detail="Cannot demote master admin")
+    
+    # Cannot demote yourself
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot demote yourself")
+    
+    await db.users.update_one({"id": user_id}, {"$set": {"is_admin": False}})
+    logger.info(f"User {target_user.get('username')} demoted from admin by {admin.get('username')}")
+    return {"success": True, "message": f"@{target_user.get('username')} is no longer an admin"}
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "message": "User deleted"}
+
+@api_router.get("/admin/reports")
+async def admin_get_reports(admin: dict = Depends(get_admin_user)):
+    reports = await db.reports.find({}, {"_id": 0}).to_list(1000)
+    return reports
+
+# ===================== VENUE ENDPOINTS =====================
+
+@api_router.get("/venues/search")
+async def search_venues(zip_code: str, user: dict = Depends(get_optional_user)):
+    """Search venues by zip code, returns locations sorted by distance"""
+    # Find all venue locations matching or near the zip code
+    locations = await db.venue_locations.find(
+        {"zip_code": {"$regex": f"^{zip_code[:3]}"}},  # Match first 3 digits for nearby
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations if loc.get("venue_id")]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    # Combine location data with venue data
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        if venue.get("is_active", True):  # Only show active venues
+            results.append({
+                **loc,
+                "venue_name": venue.get("name"),
+                "venue_logo": venue.get("logo"),
+                "is_following": user["id"] in loc.get("followers", []) if user else False
+            })
+    
+    # Sort by exact zip match first, then by zip code proximity
+    results.sort(key=lambda x: (0 if x.get("zip_code") == zip_code else 1, x.get("zip_code", "")))
+    
+    return results
+
+@api_router.get("/venues/{location_id}")
+async def get_venue_location(location_id: str, user: dict = Depends(get_optional_user)):
+    """Get a specific venue location with full details"""
+    location = await db.venue_locations.find_one({"id": location_id}, {"_id": 0})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    # Get parent venue
+    venue = await db.venues.find_one({"id": location.get("venue_id")}, {"_id": 0, "password_hash": 0})
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+    
+    # Get Stars (bartenders) info
+    star_ids = location.get("stars", [])
+    stars = []
+    if star_ids:
+        stars = await db.users.find(
+            {"id": {"$in": star_ids}},
+            {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+        ).to_list(100)
+    
+    # Merge master menus with location menus (location overrides master)
+    menus = venue.get("menus", [])
+    location_menus = location.get("menus", [])
+    if location_menus:
+        menus = location_menus
+    
+    # Merge master hours with location hours
+    hours = venue.get("hours", [])
+    location_hours = location.get("hours", [])
+    if location_hours:
+        hours = location_hours
+    
+    return {
+        **location,
+        "venue_name": venue.get("name"),
+        "venue_logo": venue.get("logo"),
+        "menus": menus,
+        "hours": hours,
+        "stars": stars,
+        "follower_count": len(location.get("followers", [])),
+        "is_following": user["id"] in location.get("followers", []) if user else False
+    }
+
+@api_router.post("/venues/{location_id}/follow")
+async def follow_venue_location(location_id: str, user: dict = Depends(get_current_user)):
+    """Follow a venue location"""
+    location = await db.venue_locations.find_one({"id": location_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    user_id = user["id"]
+    if user_id in location.get("followers", []):
+        raise HTTPException(status_code=400, detail="Already following this location")
+    
+    # Add user to location's followers
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$addToSet": {"followers": user_id}}
+    )
+    
+    # Add location to user's following_venues list
+    await db.users.update_one(
+        {"id": user_id},
+        {"$addToSet": {"following_venues": location_id}}
+    )
+    
+    return {"success": True, "message": "Now following this location"}
+
+@api_router.delete("/venues/{location_id}/follow")
+async def unfollow_venue_location(location_id: str, user: dict = Depends(get_current_user)):
+    """Unfollow a venue location"""
+    location = await db.venue_locations.find_one({"id": location_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    user_id = user["id"]
+    
+    # Remove user from location's followers
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$pull": {"followers": user_id}}
+    )
+    
+    # Remove location from user's following_venues list
+    await db.users.update_one(
+        {"id": user_id},
+        {"$pull": {"following_venues": location_id}}
+    )
+    
+    return {"success": True, "message": "Unfollowed this location"}
+
+# ===================== VENDOR ADMIN ENDPOINTS (for venue owners) =====================
+
+@api_router.post("/vendor/auth/login")
+async def vendor_login(req: VendorLoginRequest):
+    """Vendor login endpoint"""
+    vendor = await db.venues.find_one(
+        {"$or": [{"email": req.identifier.lower()}, {"username": req.identifier.lower()}]},
+        {"_id": 0}
+    )
+    
+    if not vendor or not verify_password(req.password, vendor.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not vendor.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Account is disabled")
+    
+    token = jwt.encode(
+        {"vendor_id": vendor["id"], "exp": datetime.now(timezone.utc) + timedelta(days=20)},
+        JWT_SECRET,
+        algorithm="HS256"
+    )
+    
+    # Remove sensitive data
+    vendor.pop("password_hash", None)
+    
+    return {"token": token, "vendor": vendor}
+
+# Vendor authentication helper
+async def get_current_vendor(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current vendor from JWT token"""
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        vendor_id = payload.get("vendor_id")
+        if not vendor_id:
+            raise HTTPException(status_code=401, detail="Invalid vendor token")
+        vendor = await db.venues.find_one({"id": vendor_id}, {"_id": 0})
+        if not vendor:
+            raise HTTPException(status_code=401, detail="Vendor not found")
+        if not vendor.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account is disabled")
+        return vendor
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# ===================== VENDOR SELF-SERVICE ENDPOINTS =====================
+
+@api_router.get("/vendor/me")
+async def get_vendor_profile(vendor: dict = Depends(get_current_vendor)):
+    """Get current vendor profile with all locations"""
+    vendor_data = {k: v for k, v in vendor.items() if k != "password_hash"}
+    locations = await db.venue_locations.find({"venue_id": vendor["id"]}, {"_id": 0}).to_list(100)
+    vendor_data["locations"] = locations
+    return vendor_data
+
+@api_router.put("/vendor/master")
+async def update_vendor_master(
+    name: Optional[str] = None,
+    hours: Optional[List[dict]] = None,
+    menus: Optional[List[dict]] = None,
+    vendor: dict = Depends(get_current_vendor)
+):
+    """Update vendor master page (defaults for all locations)"""
+    update_data = {}
+    if name is not None:
+        update_data["name"] = name
+    if hours is not None:
+        update_data["hours"] = hours
+    if menus is not None:
+        update_data["menus"] = menus
+    
+    if update_data:
+        await db.venues.update_one({"id": vendor["id"]}, {"$set": update_data})
+    
+    updated = await db.venues.find_one({"id": vendor["id"]}, {"_id": 0, "password_hash": 0})
+    return updated
+
+class VendorMasterUpdate(BaseModel):
+    name: Optional[str] = None
+    hours: Optional[List[dict]] = None
+    menus: Optional[List[dict]] = None
+
+@api_router.put("/vendor/master-page")
+async def update_vendor_master_page(update: VendorMasterUpdate, vendor: dict = Depends(get_current_vendor)):
+    """Update vendor master page (defaults for all locations)"""
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    
+    if update_data:
+        await db.venues.update_one({"id": vendor["id"]}, {"$set": update_data})
+    
+    updated = await db.venues.find_one({"id": vendor["id"]}, {"_id": 0, "password_hash": 0})
+    return updated
+
+@api_router.post("/vendor/logo")
+async def upload_vendor_logo(file: UploadFile = File(...), vendor: dict = Depends(get_current_vendor)):
+    """Upload vendor logo"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    path = f"{APP_NAME}/vendors/{vendor['id']}/logo.{ext}"
+    data = await file.read()
+    
+    result = put_object(path, data, file.content_type)
+    await db.venues.update_one({"id": vendor["id"]}, {"$set": {"logo": result["path"]}})
+    
+    return {"path": result["path"]}
+
+@api_router.post("/vendor/locations")
+async def vendor_add_location(req: VenueLocationCreate, vendor: dict = Depends(get_current_vendor)):
+    """Add a new location to vendor"""
+    location_id = str(uuid.uuid4())
+    
+    # Inherit master page defaults
+    location = {
+        "id": location_id,
+        "venue_id": vendor["id"],
+        "name": req.name,
+        "address": req.address,
+        "zip_code": req.zip_code,
+        "phone": req.phone,
+        "latitude": req.latitude,
+        "longitude": req.longitude,
+        "hours": [],  # Empty = use master defaults
+        "menus": [],  # Empty = use master defaults
+        "stars": [],
+        "followers": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.venue_locations.insert_one(location)
+    location.pop("_id", None)
+    
+    logger.info(f"Location {req.name} added by vendor {vendor['name']}")
+    return {"success": True, "location": location}
+
+@api_router.put("/vendor/locations/{location_id}")
+async def vendor_update_location(location_id: str, update: VenueLocationUpdate, vendor: dict = Depends(get_current_vendor)):
+    """Update a specific location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.address is not None:
+        update_data["address"] = update.address
+    if update.zip_code is not None:
+        update_data["zip_code"] = update.zip_code
+    if update.phone is not None:
+        update_data["phone"] = update.phone
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    if update.latitude is not None:
+        update_data["latitude"] = update.latitude
+    if update.longitude is not None:
+        update_data["longitude"] = update.longitude
+    
+    if update_data:
+        await db.venue_locations.update_one({"id": location_id}, {"$set": update_data})
+    
+    updated = await db.venue_locations.find_one({"id": location_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/vendor/locations/{location_id}")
+async def vendor_delete_location(location_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Delete a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.delete_one({"id": location_id})
+    
+    # Remove location from users' following_venues
+    await db.users.update_many(
+        {"following_venues": location_id},
+        {"$pull": {"following_venues": location_id}}
+    )
+    
+    logger.info(f"Location {location['name']} deleted by vendor {vendor['name']}")
+    return {"success": True, "message": "Location deleted"}
+
+@api_router.get("/vendor/search-bartenders")
+async def vendor_search_bartenders(username: str, vendor: dict = Depends(get_current_vendor)):
+    """Search for bartenders by username to add as Stars"""
+    if len(username) < 2:
+        return []
+    
+    bartenders = await db.users.find(
+        {
+            "role": "bartender",
+            "username": {"$regex": username, "$options": "i"}
+        },
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).limit(10).to_list(10)
+    
+    return bartenders
+
+@api_router.post("/vendor/locations/{location_id}/stars/{bartender_id}")
+async def vendor_add_star(location_id: str, bartender_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Add a bartender as a Star to a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    bartender = await db.users.find_one({"id": bartender_id, "role": "bartender"})
+    if not bartender:
+        raise HTTPException(status_code=404, detail="Bartender not found")
+    
+    if bartender_id in location.get("stars", []):
+        raise HTTPException(status_code=400, detail="Bartender is already a Star at this location")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$addToSet": {"stars": bartender_id}}
+    )
+    
+    logger.info(f"Bartender {bartender['username']} added as Star to {location['name']} by vendor {vendor['name']}")
+    
+    # Send push notification to the bartender
+    asyncio.create_task(send_push_notification(
+        [bartender_id],
+        f"You're now a Star at {vendor['name']}!",
+        f"You've been added as a Star at {location['name']}. Your profile will now appear on their venue page.",
+        {"type": "star_added", "location_id": location_id, "venue_name": vendor['name']}
+    ))
+    
+    return {"success": True, "message": f"{bartender['name']} added as Star"}
+
+@api_router.delete("/vendor/locations/{location_id}/stars/{bartender_id}")
+async def vendor_remove_star(location_id: str, bartender_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Remove a bartender Star from a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$pull": {"stars": bartender_id}}
+    )
+    
+    logger.info(f"Bartender {bartender_id} removed as Star from {location['name']} by vendor {vendor['name']}")
+    return {"success": True, "message": "Star removed"}
+
+@api_router.get("/vendor/locations/{location_id}/stars")
+async def vendor_get_location_stars(location_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Get all Stars (bartenders) for a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    star_ids = location.get("stars", [])
+    if not star_ids:
+        return []
+    
+    stars = await db.users.find(
+        {"id": {"$in": star_ids}},
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).to_list(100)
+    
+    return stars
+
+# ===================== VENDOR PUSH NOTIFICATIONS =====================
+
+# Rate limits: Master = 1/week, Location = 2/month
+MASTER_NOTIFICATION_COOLDOWN_DAYS = 7
+LOCATION_NOTIFICATION_COOLDOWN_DAYS = 15  # ~2 per month
+
+@api_router.get("/vendor/notification-status")
+async def get_vendor_notification_status(vendor: dict = Depends(get_current_vendor)):
+    """Get notification rate limit status for vendor"""
+    now = datetime.now(timezone.utc)
+    
+    # Master notification status
+    last_master = vendor.get("last_master_notification")
+    if last_master:
+        last_master_dt = datetime.fromisoformat(last_master.replace("Z", "+00:00"))
+        master_cooldown_end = last_master_dt + timedelta(days=MASTER_NOTIFICATION_COOLDOWN_DAYS)
+        master_available = now >= master_cooldown_end
+        master_next_available = master_cooldown_end.isoformat() if not master_available else None
+    else:
+        master_available = True
+        master_next_available = None
+    
+    # Location notification status
+    locations = await db.venue_locations.find({"venue_id": vendor["id"]}, {"_id": 0}).to_list(100)
+    location_status = []
+    for loc in locations:
+        last_notif = loc.get("last_notification")
+        if last_notif:
+            last_notif_dt = datetime.fromisoformat(last_notif.replace("Z", "+00:00"))
+            cooldown_end = last_notif_dt + timedelta(days=LOCATION_NOTIFICATION_COOLDOWN_DAYS)
+            available = now >= cooldown_end
+            next_available = cooldown_end.isoformat() if not available else None
+        else:
+            available = True
+            next_available = None
+        
+        location_status.append({
+            "id": loc["id"],
+            "name": loc["name"],
+            "notification_available": available,
+            "next_available": next_available,
+            "follower_count": len(loc.get("followers", []))
+        })
+    
+    # Count total followers across all locations
+    total_followers = set()
+    for loc in locations:
+        total_followers.update(loc.get("followers", []))
+    
+    return {
+        "master": {
+            "notification_available": master_available,
+            "next_available": master_next_available,
+            "total_follower_count": len(total_followers)
+        },
+        "locations": location_status
+    }
+
+@api_router.post("/vendor/send-notification")
+async def vendor_send_notification(req: VendorNotificationRequest, vendor: dict = Depends(get_current_vendor)):
+    """Send push notification to followers (Master or location-specific)"""
+    now = datetime.now(timezone.utc)
+    
+    if req.location_id:
+        # Location-specific notification
+        location = await db.venue_locations.find_one({"id": req.location_id, "venue_id": vendor["id"]})
+        if not location:
+            raise HTTPException(status_code=404, detail="Location not found")
+        
+        # Check rate limit
+        last_notif = location.get("last_notification")
+        if last_notif:
+            last_notif_dt = datetime.fromisoformat(last_notif.replace("Z", "+00:00"))
+            cooldown_end = last_notif_dt + timedelta(days=LOCATION_NOTIFICATION_COOLDOWN_DAYS)
+            if now < cooldown_end:
+                days_remaining = (cooldown_end - now).days + 1
+                raise HTTPException(
+                    status_code=429, 
+                    detail=f"Notification limit reached. Next available in {days_remaining} days."
+                )
+        
+        # Get followers for this location
+        follower_ids = location.get("followers", [])
+        if not follower_ids:
+            raise HTTPException(status_code=400, detail="No followers at this location")
+        
+        # Send notification
+        result = await send_push_notification(
+            follower_ids,
+            req.title,
+            req.body,
+            {"type": "vendor_notification", "vendor_id": vendor["id"], "location_id": req.location_id}
+        )
+        
+        # Update last notification timestamp
+        await db.venue_locations.update_one(
+            {"id": req.location_id},
+            {"$set": {"last_notification": now.isoformat()}}
+        )
+        
+        logger.info(f"Vendor {vendor['name']} sent notification to {len(follower_ids)} followers at {location['name']}")
+        return {"success": True, "recipients": len(follower_ids), **result}
+    
+    else:
+        # Master notification (all followers across all locations)
+        # Check rate limit
+        last_master = vendor.get("last_master_notification")
+        if last_master:
+            last_master_dt = datetime.fromisoformat(last_master.replace("Z", "+00:00"))
+            cooldown_end = last_master_dt + timedelta(days=MASTER_NOTIFICATION_COOLDOWN_DAYS)
+            if now < cooldown_end:
+                days_remaining = (cooldown_end - now).days + 1
+                raise HTTPException(
+                    status_code=429, 
+                    detail=f"Master notification limit reached. Next available in {days_remaining} days."
+                )
+        
+        # Get all followers across all locations
+        locations = await db.venue_locations.find({"venue_id": vendor["id"]}, {"_id": 0}).to_list(100)
+        all_follower_ids = set()
+        for loc in locations:
+            all_follower_ids.update(loc.get("followers", []))
+        
+        follower_ids = list(all_follower_ids)
+        if not follower_ids:
+            raise HTTPException(status_code=400, detail="No followers")
+        
+        # Send notification
+        result = await send_push_notification(
+            follower_ids,
+            req.title,
+            req.body,
+            {"type": "vendor_notification", "vendor_id": vendor["id"]}
+        )
+        
+        # Update last notification timestamp
+        await db.venues.update_one(
+            {"id": vendor["id"]},
+            {"$set": {"last_master_notification": now.isoformat()}}
+        )
+        
+        logger.info(f"Vendor {vendor['name']} sent master notification to {len(follower_ids)} followers")
+        return {"success": True, "recipients": len(follower_ids), **result}
+
+# ===================== SUPER ADMIN: Create Vendors =====================
+
+@api_router.post("/admin/vendors")
+async def admin_create_vendor(req: VenueCreate, admin: dict = Depends(get_admin_user)):
+    """Admin creates a new vendor account"""
+    # Check if email already exists
+    existing = await db.venues.find_one({"email": req.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    vendor_id = str(uuid.uuid4())
+    username = req.name.lower().replace(" ", "-").replace("'", "")
+    
+    # Ensure unique username
+    existing_username = await db.venues.find_one({"username": username})
+    counter = 1
+    original_username = username
+    while existing_username:
+        username = f"{original_username}-{counter}"
+        existing_username = await db.venues.find_one({"username": username})
+        counter += 1
+    
+    vendor = {
+        "id": vendor_id,
+        "email": req.email.lower(),
+        "password_hash": hash_password(req.password),
+        "name": req.name,
+        "username": username,
+        "logo": None,
+        "menus": [],
+        "hours": [],
+        "locations": [],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": admin["id"]
+    }
+    
+    await db.venues.insert_one(vendor)
+    vendor.pop("password_hash")
+    vendor.pop("_id", None)
+    
+    logger.info(f"Vendor {req.name} created by admin {admin.get('username')}")
+    return {"success": True, "vendor": vendor}
+
+@api_router.get("/admin/vendors")
+async def admin_list_vendors(admin: dict = Depends(get_admin_user)):
+    """List all vendors"""
+    vendors = await db.venues.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    
+    # Get location count for each vendor
+    for vendor in vendors:
+        location_count = await db.venue_locations.count_documents({"venue_id": vendor["id"]})
+        vendor["location_count"] = location_count
+    
+    return vendors
+
+@api_router.get("/admin/vendors/{vendor_id}")
+async def admin_get_vendor(vendor_id: str, admin: dict = Depends(get_admin_user)):
+    """Get vendor details including all locations"""
+    vendor = await db.venues.find_one({"id": vendor_id}, {"_id": 0, "password_hash": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    locations = await db.venue_locations.find({"venue_id": vendor_id}, {"_id": 0}).to_list(100)
+    vendor["locations"] = locations
+    
+    return vendor
+
+@api_router.put("/admin/vendors/{vendor_id}/toggle")
+async def admin_toggle_vendor(vendor_id: str, admin: dict = Depends(get_admin_user)):
+    """Enable/disable a vendor account"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    new_status = not vendor.get("is_active", True)
+    await db.venues.update_one({"id": vendor_id}, {"$set": {"is_active": new_status}})
+    
+    return {"success": True, "is_active": new_status}
+
+class AdminResetVendorPassword(BaseModel):
+    password: str
+
+@api_router.put("/admin/vendors/{vendor_id}/reset-password")
+async def admin_reset_vendor_password(vendor_id: str, req: AdminResetVendorPassword, admin: dict = Depends(get_admin_user)):
+    """Reset vendor password (admin only)"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    new_hash = hash_password(req.password)
+    await db.venues.update_one({"id": vendor_id}, {"$set": {"password_hash": new_hash}})
+    
+    logger.info(f"Vendor {vendor['name']} password reset by admin {admin.get('username')}")
+    return {"success": True, "message": "Password reset successfully"}
+
+@api_router.post("/admin/vendors/{vendor_id}/locations")
+async def admin_add_location(vendor_id: str, req: VenueLocationCreate, admin: dict = Depends(get_admin_user)):
+    """Add a location to a vendor"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    location_id = str(uuid.uuid4())
+    location = {
+        "id": location_id,
+        "venue_id": vendor_id,
+        "name": req.name,
+        "address": req.address,
+        "zip_code": req.zip_code,
+        "phone": req.phone,
+        "latitude": req.latitude,
+        "longitude": req.longitude,
+        "hours": [],
+        "menus": [],
+        "stars": [],
+        "followers": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.venue_locations.insert_one(location)
+    location.pop("_id", None)
+    
+    logger.info(f"Location {req.name} added to vendor {vendor['name']} by admin {admin.get('username')}")
+    return {"success": True, "location": location}
+
+@api_router.put("/admin/vendors/{vendor_id}")
+async def admin_update_vendor(vendor_id: str, update: VendorMasterUpdate, admin: dict = Depends(get_admin_user)):
+    """Update vendor master page (admin)"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    
+    if update_data:
+        await db.venues.update_one({"id": vendor_id}, {"$set": update_data})
+    
+    logger.info(f"Vendor {vendor['name']} updated by admin {admin.get('username')}")
+    return {"success": True}
+
+@api_router.post("/admin/vendors/{vendor_id}/logo")
+async def admin_upload_vendor_logo(vendor_id: str, file: UploadFile = File(...), admin: dict = Depends(get_admin_user)):
+    """Upload vendor logo (admin)"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    path = f"{APP_NAME}/vendors/{vendor_id}/logo.{ext}"
+    data = await file.read()
+    
+    result = put_object(path, data, file.content_type)
+    await db.venues.update_one({"id": vendor_id}, {"$set": {"logo": result["path"]}})
+    
+    return {"path": result["path"]}
+
+@api_router.put("/admin/vendors/{vendor_id}/locations/{location_id}")
+async def admin_update_location(vendor_id: str, location_id: str, update: VenueLocationUpdate, admin: dict = Depends(get_admin_user)):
+    """Update a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.address is not None:
+        update_data["address"] = update.address
+    if update.zip_code is not None:
+        update_data["zip_code"] = update.zip_code
+    if update.phone is not None:
+        update_data["phone"] = update.phone
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    
+    if update_data:
+        await db.venue_locations.update_one({"id": location_id}, {"$set": update_data})
+    
+    return {"success": True}
+
+@api_router.delete("/admin/vendors/{vendor_id}/locations/{location_id}")
+async def admin_delete_location(vendor_id: str, location_id: str, admin: dict = Depends(get_admin_user)):
+    """Delete a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.delete_one({"id": location_id})
+    
+    # Remove from users' following
+    await db.users.update_many(
+        {"following_venues": location_id},
+        {"$pull": {"following_venues": location_id}}
+    )
+    
+    logger.info(f"Location {location['name']} deleted by admin {admin.get('username')}")
+    return {"success": True}
+
+@api_router.get("/admin/search-bartenders")
+async def admin_search_bartenders(username: str, admin: dict = Depends(get_admin_user)):
+    """Search bartenders by username (admin)"""
+    if len(username) < 2:
+        return []
+    
+    bartenders = await db.users.find(
+        {
+            "role": "bartender",
+            "username": {"$regex": username, "$options": "i"}
+        },
+        {"_id": 0, "password_hash": 0}
+    ).limit(10).to_list(10)
+    
+    return bartenders
+
+@api_router.get("/admin/vendors/{vendor_id}/locations/{location_id}/stars")
+async def admin_get_location_stars(vendor_id: str, location_id: str, admin: dict = Depends(get_admin_user)):
+    """Get stars for a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    star_ids = location.get("stars", [])
+    if not star_ids:
+        return []
+    
+    stars = await db.users.find(
+        {"id": {"$in": star_ids}},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    
+    return stars
+
+@api_router.post("/admin/vendors/{vendor_id}/locations/{location_id}/stars/{bartender_id}")
+async def admin_add_star(vendor_id: str, location_id: str, bartender_id: str, admin: dict = Depends(get_admin_user)):
+    """Add a star to a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    bartender = await db.users.find_one({"id": bartender_id, "role": "bartender"})
+    if not bartender:
+        raise HTTPException(status_code=404, detail="Bartender not found")
+    
+    if bartender_id in location.get("stars", []):
+        raise HTTPException(status_code=400, detail="Already a star")
+    
+    # Get vendor name for notification
+    vendor = await db.venues.find_one({"id": vendor_id}, {"name": 1})
+    venue_name = vendor.get("name", "a venue") if vendor else "a venue"
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$addToSet": {"stars": bartender_id}}
+    )
+    
+    logger.info(f"Bartender {bartender['username']} added as star by admin {admin.get('username')}")
+    
+    # Send push notification to the bartender
+    asyncio.create_task(send_push_notification(
+        [bartender_id],
+        f"You're now a Star at {venue_name}!",
+        f"You've been added as a Star at {location['name']}. Your profile will now appear on their venue page.",
+        {"type": "star_added", "location_id": location_id, "venue_name": venue_name}
+    ))
+    
+    return {"success": True}
+
+@api_router.delete("/admin/vendors/{vendor_id}/locations/{location_id}/stars/{bartender_id}")
+async def admin_remove_star(vendor_id: str, location_id: str, bartender_id: str, admin: dict = Depends(get_admin_user)):
+    """Remove a star from a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$pull": {"stars": bartender_id}}
+    )
+    
+    return {"success": True}
+
 # Include router and middleware
 app.include_router(api_router)
 
@@ -764,17 +2498,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup():
-    # Initialize storage
-    init_storage()
-    # Create indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("username", unique=True)
-    await db.messages.create_index([("sender_id", 1), ("recipient_id", 1)])
-    await db.invites.create_index("creator_id")
-    logger.info("SipCircle API started")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Old startup/shutdown events removed - now using lifespan context manager
