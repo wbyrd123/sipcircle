@@ -16,6 +16,7 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - Followers/Following tabs on all profiles
 - Post-login redirect to profile from QR scan
 - Privacy controls for followers/following lists visibility
+- **Following count includes both users AND venues** (fixed April 2026)
 
 ### Venue Platform (NEW - Phase 1 Complete)
 - Venues page with zip code search
@@ -55,6 +56,9 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - [x] Locations appear in Following list (new "Following" tab with People/Places sections)
 - [x] CTA: "Follow to receive important updates such as specials or new Stars joining our team"
 - [x] Admin endpoints to create vendors and add locations
+- [x] Dashboard shows Following count (users + venues combined)
+- [x] Profile page shows Following count (users + venues combined)
+- [x] Clicking Following card navigates to Followers page with `?tab=following` parameter
 
 ### Phase 2: Vendor Dashboard + Self-Service (NEXT)
 - [ ] Vendor login (web only)
@@ -128,7 +132,17 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 
 ## Key Files
 - `/app/backend/server.py` - All API endpoints including venue endpoints
+- `/app/frontend/src/pages/BartenderDashboard.jsx` - Home dashboard with stats
+- `/app/frontend/src/pages/BartenderProfile.jsx` - Bartender profile view
 - `/app/frontend/src/pages/VenuesPage.jsx` - Venue search page
 - `/app/frontend/src/pages/VenueProfile.jsx` - Venue location profile
 - `/app/frontend/src/pages/FollowersPage.jsx` - Updated with Following tab (People/Places)
 - `/app/frontend/src/components/BottomNav.jsx` - Updated with Venues icon
+
+## Changelog
+
+### April 26, 2026
+- Fixed Following count bug: Dashboard and Profile now correctly show combined user + venue following count
+- Added "Following" card to Dashboard stats grid
+- Updated backend `/api/bartender/{username}` and `/api/user/{username}` endpoints to return `following_count` including venues
+- Followers page now respects `?tab=following` URL parameter from Dashboard navigation

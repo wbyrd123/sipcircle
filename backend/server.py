@@ -755,7 +755,13 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     bartender["is_following"] = is_following
     bartender["is_pending"] = is_pending
     bartender["follower_count"] = len(bartender.get("followers", []))
-    bartender["following_count"] = len(bartender.get("following", []))
+    
+    # Following count includes both users and venues
+    following_users_count = len(bartender.get("following", []))
+    following_venues_count = len(bartender.get("following_venues", []))
+    bartender["following_count"] = following_users_count + following_venues_count
+    bartender["following_users_count"] = following_users_count
+    bartender["following_venues_count"] = following_venues_count
     
     return bartender
 
@@ -804,7 +810,13 @@ async def get_user_profile(username: str, user: dict = Depends(get_optional_user
     profile["is_following"] = is_following
     profile["is_pending"] = is_pending
     profile["follower_count"] = len(profile.get("followers", []))
-    profile["following_count"] = len(profile.get("following", []))
+    
+    # Following count includes both users and venues
+    following_users_count = len(profile.get("following", []))
+    following_venues_count = len(profile.get("following_venues", []))
+    profile["following_count"] = following_users_count + following_venues_count
+    profile["following_users_count"] = following_users_count
+    profile["following_venues_count"] = following_venues_count
     
     return profile
 

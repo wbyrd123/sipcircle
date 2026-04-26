@@ -16,7 +16,7 @@ const BartenderDashboard = () => {
   const navigate = useNavigate();
   const { user, token, updateUser } = useAuth();
   const [showQR, setShowQR] = useState(false);
-  const [stats, setStats] = useState({ followers: 0 });
+  const [stats, setStats] = useState({ followers: 0, following: 0 });
   const [suggestions, setSuggestions] = useState([]);
   const [followingUsers, setFollowingUsers] = useState({});
   const [invites, setInvites] = useState([]);
@@ -49,10 +49,20 @@ const BartenderDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const followersRes = await axios.get(`${API}/followers`, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      const [followersRes, followingRes, followingVenuesRes] = await Promise.all([
+        axios.get(`${API}/followers`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/following`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/user/following-venues`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      const followingUsersCount = followingRes.data.length;
+      const followingVenuesCount = followingVenuesRes.data.length;
+      const totalFollowing = followingUsersCount + followingVenuesCount;
+      
+      setStats({ 
+        followers: followersRes.data.length,
+        following: totalFollowing
       });
-      setStats({ followers: followersRes.data.length });
     } catch (e) {
       console.error("Error fetching stats:", e);
     }
@@ -218,15 +228,31 @@ const BartenderDashboard = () => {
             <p className="text-white/60 text-sm">Followers</p>
           </button>
           <button 
-            onClick={() => navigate("/invites")}
+            onClick={() => navigate("/followers?tab=following")}
             className="glass-card-hover p-6 text-left"
-            data-testid="invites-btn"
+            data-testid="following-card"
           >
-            <Calendar className="w-8 h-8 text-secondary mb-3" />
-            <p className="text-white font-medium">Invites</p>
-            <p className="text-white/50 text-sm">Plan meetups</p>
+            <Users className="w-8 h-8 text-secondary mb-3" />
+            <p className="text-3xl font-bold text-white">{stats.following}</p>
+            <p className="text-white/60 text-sm">Following</p>
           </button>
         </div>
+
+        {/* Invites Card */}
+        <button 
+          onClick={() => navigate("/invites")}
+          className="glass-card-hover p-6 w-full text-left"
+          data-testid="invites-btn"
+        >
+          <div className="flex items-center gap-4">
+            <Calendar className="w-8 h-8 text-primary" />
+            <div>
+              <p className="text-white font-medium">Invites</p>
+              <p className="text-white/50 text-sm">Plan meetups</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-white/40 ml-auto" />
+          </div>
+        </button>
 
         {/* Upcoming Invites */}
         {invites.length > 0 && (

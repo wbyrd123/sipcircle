@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth, API } from "../App";
 import axios from "axios";
 import { Button } from "../components/ui/button";
@@ -14,13 +14,14 @@ import {
 
 const FollowersPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, token } = useAuth();
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [followingVenues, setFollowingVenues] = useState([]);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("followers"); // "followers", "following", "blocked"
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "followers"); // "followers", "following", "blocked"
   const [blockConfirm, setBlockConfirm] = useState(null);
 
   useEffect(() => {
