@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
   Wine, MapPin, Clock, Users, QrCode, DollarSign, 
-  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2
+  ExternalLink, ArrowLeft, UserPlus, UserMinus, Share2, GlassWater, Loader2, Store
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ const BartenderProfile = () => {
   const [activeTab, setActiveTab] = useState(null); // 'followers' or 'following'
   const [followersList, setFollowersList] = useState([]);
   const [followingList, setFollowingList] = useState([]);
+  const [followingVenues, setFollowingVenues] = useState([]);
   const [tabLoading, setTabLoading] = useState(false);
 
   const profileUrl = `${WEB_URL}/b/${username}`;
@@ -74,11 +75,20 @@ const BartenderProfile = () => {
     setActiveTab(tab);
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get(`${API}/user/${username}/${tab}`, { headers });
       if (tab === 'followers') {
+        const response = await axios.get(`${API}/user/${username}/${tab}`, { headers });
         setFollowersList(response.data);
       } else {
-        setFollowingList(response.data);
+        // For following, fetch both users and venues
+        const [usersRes, venuesRes] = await Promise.all([
+          axios.get(`${API}/user/${username}/following`, { headers }),
+          // Only fetch venues if viewing own profile
+          user && user.username === username 
+            ? axios.get(`${API}/user/following-venues`, { headers })
+            : Promise.resolve({ data: [] })
+        ]);
+        setFollowingList(usersRes.data);
+        setFollowingVenues(venuesRes.data);
       }
     } catch (e) {
       toast.error(`Failed to load ${tab}`);
@@ -279,15 +289,15 @@ const BartenderProfile = () => {
               <div className="flex justify-center py-4">
                 <Loader2 className="w-6 h-6 text-primary animate-spin" />
               </div>
-            ) : (
+            ) : activeTab === 'followers' ? (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {(activeTab === 'followers' ? followersList : followingList).length > 0 ? (
-                  (activeTab === 'followers' ? followersList : followingList).map((person) => (
+                {followersList.length > 0 ? (
+                  followersList.map((person) => (
                     <button
                       key={person.id}
-                      onClick={() => navigate(`/u/${person.username}`)}
+                      onClick={() => navigate(person.role === 'bartender' ? `/b/${person.username}` : `/u/${person.username}`)}
                       className="w-full flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                      data-testid={`${activeTab}-item-${person.username}`}
+                      data-testid={`followers-item-${person.username}`}
                     >
                       <Avatar className="w-10 h-10">
                         <AvatarImage src={getImageUrl(person.profile_image)} />
@@ -307,9 +317,77 @@ const BartenderProfile = () => {
                     </button>
                   ))
                 ) : (
-                  <p className="text-white/40 text-sm text-center py-4">
-                    {activeTab === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
-                  </p>
+                  <p className="text-white/40 text-sm text-center py-4">No followers yet</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-72 overflow-y-auto">
+                {/* Following Users */}
+                {followingList.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-white/60 text-xs font-medium flex items-center gap-1">
+                      <Users className="w-3 h-3" /> People ({followingList.length})
+                    </p>
+                    {followingList.map((person) => (
+                      <button
+                        key={person.id}
+                        onClick={() => navigate(person.role === 'bartender' ? `/b/${person.username}` : `/u/${person.username}`)}
+                        className="w-full flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                        data-testid={`following-item-${person.username}`}
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={getImageUrl(person.profile_image)} />
+                          <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                            {getInitials(person.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="text-left">
+                          <p className="text-white font-medium text-sm">{person.name}</p>
+                          <p className="text-white/50 text-xs">@{person.username}</p>
+                        </div>
+                        <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
+                          person.role === 'bartender' ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary'
+                        }`}>
+                          {person.role === 'bartender' ? 'Bartender' : 'Bar-Goer'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Following Venues */}
+                {followingVenues.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-white/60 text-xs font-medium flex items-center gap-1">
+                      <Store className="w-3 h-3" /> Places ({followingVenues.length})
+                    </p>
+                    {followingVenues.map((venue) => (
+                      <button
+                        key={venue.id}
+                        onClick={() => navigate(`/venue/${venue.id}`)}
+                        className="w-full flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                        data-testid={`following-venue-${venue.id}`}
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={getImageUrl(venue.venue_logo)} />
+                          <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                            {venue.venue_name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "V"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="text-left">
+                          <p className="text-white font-medium text-sm">{venue.venue_name}</p>
+                          <p className="text-white/50 text-xs">{venue.name}</p>
+                        </div>
+                        <span className="ml-auto px-2 py-0.5 rounded-full text-xs bg-primary/20 text-primary">
+                          Venue
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {followingList.length === 0 && followingVenues.length === 0 && (
+                  <p className="text-white/40 text-sm text-center py-4">Not following anyone yet</p>
                 )}
               </div>
             )}
