@@ -759,6 +759,35 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     
     return bartender
 
+@api_router.get("/user/following-venues")
+async def get_following_venues(user: dict = Depends(get_current_user)):
+    """Get list of venues the user is following"""
+    following_venue_ids = user.get("following_venues", [])
+    
+    if not following_venue_ids:
+        return []
+    
+    locations = await db.venue_locations.find(
+        {"id": {"$in": following_venue_ids}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations if loc.get("venue_id")]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        results.append({
+            **loc,
+            "venue_name": venue.get("name"),
+            "venue_logo": venue.get("logo")
+        })
+    
+    return results
+
 @api_router.get("/user/{username}")
 async def get_user_profile(username: str, user: dict = Depends(get_optional_user)):
     profile = await db.users.find_one({"username": username}, {"_id": 0, "password_hash": 0})
@@ -1506,35 +1535,6 @@ async def unfollow_venue_location(location_id: str, user: dict = Depends(get_cur
     )
     
     return {"success": True, "message": "Unfollowed this location"}
-
-@api_router.get("/user/following-venues")
-async def get_following_venues(user: dict = Depends(get_current_user)):
-    """Get list of venues the user is following"""
-    following_venue_ids = user.get("following_venues", [])
-    
-    if not following_venue_ids:
-        return []
-    
-    locations = await db.venue_locations.find(
-        {"id": {"$in": following_venue_ids}},
-        {"_id": 0}
-    ).to_list(100)
-    
-    # Get venue info for each location
-    venue_ids = list(set([loc.get("venue_id") for loc in locations]))
-    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
-    venues_map = {v["id"]: v for v in venues}
-    
-    results = []
-    for loc in locations:
-        venue = venues_map.get(loc.get("venue_id"), {})
-        results.append({
-            **loc,
-            "venue_name": venue.get("name"),
-            "venue_logo": venue.get("logo")
-        })
-    
-    return results
 
 # ===================== VENDOR ADMIN ENDPOINTS (for venue owners) =====================
 
