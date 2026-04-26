@@ -78,11 +78,18 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - [x] Invite sent → Automatic notification to recipient
 - [x] Notification status API with rate limit tracking
 - [x] Frontend push notification handling (Capacitor plugin)
-- [ ] **USER ACTION REQUIRED**: Upload APNs key (.p8) to Firebase Console for iOS
+- [x] **Firebase APNs Configuration Complete** - User uploaded .p8 key
 
-### Phase 4: Bartender Updates + Cross-Follow (NEXT)
-- [ ] Bartenders add work location (Google Maps or manual)
-- [ ] "Follow [Venue Name]" button on bartender profile (if at registered vendor)
+### Phase 4: Cross-Follow Feature ✅ COMPLETE
+- [x] **Bartender Profile → "Works At" section**: Shows venues where bartender is a Star with Follow buttons
+- [x] **Venue Profile → "The Stars" section**: Shows bartenders (Stars) with Follow buttons
+- [x] New API: `GET /api/bartender/{username}/venues` - Get venues where bartender is a Star
+- [ ] Bartenders add work location (Google Maps or manual) - manual entry already exists
+
+### Phase 5: Future Enhancements (NEXT)
+- [ ] Custom domain setup
+- [ ] Delete orphaned messaging files
+- [ ] Add "PourCircle" to keywords in App Store Connect
 
 ## Key API Endpoints
 
@@ -165,3 +172,10 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
   - Locations: add/edit/delete locations with hours/menu overrides
   - Stars: search bartenders by username and link to locations
   - Admin endpoint to reset vendor passwords
+- **Firebase APNs Configuration Complete**: User uploaded .p8 Authentication Key to Firebase Console (both Development and Production)
+- **Cross-Follow Feature (Phase 4) Complete:**
+  - Bartender Profile now shows "Works At" section with linked venues
+  - Users can follow venues directly from bartender profile
+  - Venue Profile now shows Follow buttons next to Stars (bartenders)
+  - Users can follow bartenders directly from venue profile
+  - New API endpoint: `GET /api/bartender/{username}/venues`

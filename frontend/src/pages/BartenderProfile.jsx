@@ -24,6 +24,8 @@ const BartenderProfile = () => {
   const [followingList, setFollowingList] = useState([]);
   const [followingVenues, setFollowingVenues] = useState([]);
   const [tabLoading, setTabLoading] = useState(false);
+  const [linkedVenues, setLinkedVenues] = useState([]);
+  const [venueFollowLoading, setVenueFollowLoading] = useState({});
 
   const profileUrl = `${WEB_URL}/b/${username}`;
 
@@ -54,6 +56,15 @@ const BartenderProfile = () => {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await axios.get(`${API}/bartender/${username}`, { headers });
       setBartender(response.data);
+      
+      // Fetch linked venues (where bartender is a Star)
+      try {
+        const venuesRes = await axios.get(`${API}/bartender/${username}/venues`, { headers });
+        setLinkedVenues(venuesRes.data);
+      } catch (e) {
+        // Non-critical, just log
+        console.log("Could not fetch linked venues");
+      }
     } catch (e) {
       if (e.response?.status === 403) {
         toast.error("You are blocked by this bartender");
@@ -138,6 +149,43 @@ const BartenderProfile = () => {
     } else {
       navigator.clipboard.writeText(profileUrl);
       toast.success("Link copied!");
+    }
+  };
+
+  const handleFollowVenue = async (venueId) => {
+    if (!user) {
+      navigate(`/auth?redirect=/b/${username}`);
+      return;
+    }
+
+    setVenueFollowLoading(prev => ({ ...prev, [venueId]: true }));
+    try {
+      const venue = linkedVenues.find(v => v.id === venueId);
+      if (venue?.is_following) {
+        await axios.delete(`${API}/venues/${venueId}/follow`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setLinkedVenues(prev => prev.map(v => 
+          v.id === venueId 
+            ? { ...v, is_following: false, follower_count: v.follower_count - 1 }
+            : v
+        ));
+        toast.success("Unfollowed venue");
+      } else {
+        await axios.post(`${API}/venues/${venueId}/follow`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setLinkedVenues(prev => prev.map(v => 
+          v.id === venueId 
+            ? { ...v, is_following: true, follower_count: v.follower_count + 1 }
+            : v
+        ));
+        toast.success("Now following this venue!");
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to update follow status");
+    } finally {
+      setVenueFollowLoading(prev => ({ ...prev, [venueId]: false }));
     }
   };
 
@@ -462,6 +510,75 @@ const BartenderProfile = () => {
                   <ExternalLink className="w-4 h-4 text-[#0070BA]" />
                 </a>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Linked Venues (Works At) - Cross-Follow Feature */}
+        {linkedVenues.length > 0 && (
+          <div className="glass-card p-6">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Store className="w-5 h-5 text-primary" />
+              Works At
+            </h2>
+            <div className="space-y-3">
+              {linkedVenues.map((venue) => (
+                <div 
+                  key={venue.id} 
+                  className="p-4 rounded-lg bg-white/5 border border-white/10"
+                  data-testid={`linked-venue-${venue.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => navigate(`/venue/${venue.id}`)}
+                      className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity"
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={getImageUrl(venue.venue_logo)} />
+                        <AvatarFallback className="bg-primary/20 text-primary">
+                          {venue.venue_name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "V"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-medium">{venue.venue_name}</h3>
+                        <p className="text-white/60 text-sm">{venue.name}</p>
+                        <p className="text-white/40 text-xs flex items-center gap-1 mt-1">
+                          <Users className="w-3 h-3" />
+                          {venue.follower_count} followers
+                        </p>
+                      </div>
+                    </button>
+                    
+                    {/* Follow Venue Button */}
+                    <Button
+                      size="sm"
+                      onClick={() => handleFollowVenue(venue.id)}
+                      disabled={venueFollowLoading[venue.id]}
+                      className={`shrink-0 ${
+                        venue.is_following 
+                          ? "bg-white/10 text-white hover:bg-white/20" 
+                          : "btn-primary"
+                      }`}
+                      data-testid={`follow-venue-${venue.id}`}
+                    >
+                      {venueFollowLoading[venue.id] ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : venue.is_following ? (
+                        "Following"
+                      ) : (
+                        "Follow"
+                      )}
+                    </Button>
+                  </div>
+                  
+                  {venue.address && (
+                    <div className="mt-3 flex items-center gap-2 text-white/50 text-sm">
+                      <MapPin className="w-4 h-4" />
+                      <span>{venue.address}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

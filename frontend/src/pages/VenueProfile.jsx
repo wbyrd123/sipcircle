@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
   ArrowLeft, MapPin, Clock, Phone, Users, Star, ExternalLink, 
-  Loader2, QrCode, Share2, Copy, Menu, Utensils
+  Loader2, QrCode, Share2, Copy, Menu, Utensils, UserPlus, UserMinus
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +19,8 @@ const VenueProfile = () => {
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [starFollowLoading, setStarFollowLoading] = useState({});
+  const [starFollowStatus, setStarFollowStatus] = useState({});
 
   const venueUrl = `${WEB_URL}/venue/${locationId}`;
 
@@ -31,6 +33,19 @@ const VenueProfile = () => {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await axios.get(`${API}/venues/${locationId}`, { headers });
       setVenue(response.data);
+      
+      // Check follow status for each star if user is logged in
+      if (user && response.data.stars?.length > 0) {
+        const statusMap = {};
+        for (const star of response.data.stars) {
+          // Check if current user is following this star
+          statusMap[star.id] = {
+            is_following: user.following?.includes(star.id) || false,
+            is_pending: user.pending_follows?.includes(star.id) || false
+          };
+        }
+        setStarFollowStatus(statusMap);
+      }
     } catch (e) {
       if (e.response?.status === 404) {
         toast.error("Venue not found");
@@ -66,6 +81,54 @@ const VenueProfile = () => {
       toast.error(e.response?.data?.detail || "Failed to update follow status");
     } finally {
       setFollowLoading(false);
+    }
+  };
+
+  const handleFollowStar = async (starId, e) => {
+    e.stopPropagation(); // Prevent navigation to profile
+    
+    if (!user) {
+      navigate(`/auth?redirect=/venue/${locationId}`);
+      return;
+    }
+
+    setStarFollowLoading(prev => ({ ...prev, [starId]: true }));
+    try {
+      const currentStatus = starFollowStatus[starId] || {};
+      
+      if (currentStatus.is_following || currentStatus.is_pending) {
+        // Unfollow or cancel request
+        await axios.delete(`${API}/follow/${starId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setStarFollowStatus(prev => ({
+          ...prev,
+          [starId]: { is_following: false, is_pending: false }
+        }));
+        toast.success(currentStatus.is_following ? "Unfollowed" : "Request cancelled");
+      } else {
+        // Follow
+        const response = await axios.post(`${API}/follow/${starId}`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.data.status === "pending") {
+          setStarFollowStatus(prev => ({
+            ...prev,
+            [starId]: { is_following: false, is_pending: true }
+          }));
+          toast.success("Follow request sent!");
+        } else {
+          setStarFollowStatus(prev => ({
+            ...prev,
+            [starId]: { is_following: true, is_pending: false }
+          }));
+          toast.success("Now following!");
+        }
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to update follow status");
+    } finally {
+      setStarFollowLoading(prev => ({ ...prev, [starId]: false }));
     }
   };
 
@@ -279,7 +342,7 @@ const VenueProfile = () => {
           </div>
         )}
 
-        {/* The Stars (Bartenders) */}
+        {/* The Stars (Bartenders) - with Follow Buttons */}
         {venue.stars && venue.stars.length > 0 && (
           <div className="glass-card p-4">
             <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
@@ -287,26 +350,72 @@ const VenueProfile = () => {
               The Stars
             </h2>
             <div className="space-y-3">
-              {venue.stars.map((star) => (
-                <button
-                  key={star.id}
-                  onClick={() => navigate(`/b/${star.username}`)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                  data-testid={`star-${star.username}`}
-                >
-                  <Avatar className="w-12 h-12">
-                    <AvatarImage src={getImageUrl(star.profile_image)} />
-                    <AvatarFallback className="bg-primary/20 text-primary">
-                      {star.name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 text-left">
-                    <p className="text-white font-medium">{star.name}</p>
-                    <p className="text-white/50 text-sm">@{star.username}</p>
+              {venue.stars.map((star) => {
+                const isOwnProfile = user && user.id === star.id;
+                const followStatus = starFollowStatus[star.id] || {};
+                const isLoading = starFollowLoading[star.id];
+                
+                return (
+                  <div
+                    key={star.id}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-white/5"
+                    data-testid={`star-${star.username}`}
+                  >
+                    <button
+                      onClick={() => navigate(`/b/${star.username}`)}
+                      className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity"
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={getImageUrl(star.profile_image)} />
+                        <AvatarFallback className="bg-primary/20 text-primary">
+                          {star.name?.split(" ").map(n => n[0]).join("").toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">{star.name}</p>
+                        <p className="text-white/50 text-sm">@{star.username}</p>
+                      </div>
+                    </button>
+                    
+                    {/* Follow Button for Star */}
+                    {user && !isOwnProfile && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => handleFollowStar(star.id, e)}
+                        disabled={isLoading}
+                        className={`shrink-0 ${
+                          followStatus.is_following 
+                            ? "bg-white/10 text-white hover:bg-white/20" 
+                            : followStatus.is_pending
+                              ? "bg-white/5 text-white/60 border border-white/20"
+                              : "btn-primary"
+                        }`}
+                        data-testid={`follow-star-${star.username}`}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : followStatus.is_following ? (
+                          <><UserMinus className="w-3 h-3 mr-1" />Following</>
+                        ) : followStatus.is_pending ? (
+                          "Requested"
+                        ) : (
+                          <><UserPlus className="w-3 h-3 mr-1" />Follow</>
+                        )}
+                      </Button>
+                    )}
+                    
+                    {!user && (
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/auth?redirect=/venue/${locationId}`)}
+                        className="btn-primary shrink-0"
+                      >
+                        <UserPlus className="w-3 h-3 mr-1" />Follow
+                      </Button>
+                    )}
                   </div>
-                  <span className="text-primary text-sm">View Profile →</span>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

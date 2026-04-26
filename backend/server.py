@@ -869,7 +869,7 @@ async def get_file(path: str, user: dict = Depends(get_optional_user)):
     try:
         data, content_type = get_object(path)
         return Response(content=data, media_type=content_type)
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=404, detail="File not found")
 
 # ===================== USER DISCOVERY =====================
@@ -932,6 +932,49 @@ async def get_bartender_profile(username: str, user: dict = Depends(get_optional
     bartender["following_venues_count"] = following_venues_count
     
     return bartender
+
+@api_router.get("/bartender/{username}/venues")
+async def get_bartender_venues(username: str, user: dict = Depends(get_optional_user)):
+    """Get venues where the bartender is linked as a Star"""
+    # First find the bartender
+    bartender = await db.users.find_one(
+        {"username": {"$regex": f"^{username}$", "$options": "i"}, "role": UserRole.BARTENDER},
+        {"_id": 0, "id": 1}
+    )
+    if not bartender:
+        raise HTTPException(status_code=404, detail="Bartender not found")
+    
+    bartender_id = bartender["id"]
+    
+    # Find all venue locations where this bartender is a star
+    locations = await db.venue_locations.find(
+        {"stars": bartender_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    if not locations:
+        return []
+    
+    # Get venue info for each location
+    venue_ids = list(set([loc.get("venue_id") for loc in locations if loc.get("venue_id")]))
+    venues = await db.venues.find({"id": {"$in": venue_ids}}, {"_id": 0, "password_hash": 0}).to_list(100)
+    venues_map = {v["id"]: v for v in venues}
+    
+    results = []
+    for loc in locations:
+        venue = venues_map.get(loc.get("venue_id"), {})
+        results.append({
+            "id": loc.get("id"),
+            "name": loc.get("name"),
+            "address": loc.get("address"),
+            "venue_id": loc.get("venue_id"),
+            "venue_name": venue.get("name"),
+            "venue_logo": venue.get("logo"),
+            "follower_count": len(loc.get("followers", [])),
+            "is_following": user["id"] in loc.get("followers", []) if user else False
+        })
+    
+    return results
 
 @api_router.get("/user/following-venues")
 async def get_following_venues(user: dict = Depends(get_current_user)):
