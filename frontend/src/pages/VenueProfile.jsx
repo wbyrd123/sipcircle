@@ -120,14 +120,21 @@ const VenueProfile = () => {
 
   if (!venue) return null;
 
+  // Check if we have navigation history (i.e., not opened in new tab)
+  const canGoBack = window.history.length > 1;
+
   return (
     <div className="min-h-screen bg-background pb-8">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-white/5">
         <div className="flex items-center justify-between p-4">
-          <button onClick={() => navigate(-1)} className="text-white/60 hover:text-white">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
+          {canGoBack ? (
+            <button onClick={() => navigate(-1)} className="text-white/60 hover:text-white">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+          ) : (
+            <div className="w-6" /> 
+          )}
           <div className="flex items-center gap-2">
             <button onClick={() => setShowQR(true)} className="p-2 text-white/60 hover:text-white">
               <QrCode className="w-5 h-5" />

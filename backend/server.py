@@ -2007,6 +2007,160 @@ async def admin_add_location(vendor_id: str, req: VenueLocationCreate, admin: di
     logger.info(f"Location {req.name} added to vendor {vendor['name']} by admin {admin.get('username')}")
     return {"success": True, "location": location}
 
+@api_router.put("/admin/vendors/{vendor_id}")
+async def admin_update_vendor(vendor_id: str, update: VendorMasterUpdate, admin: dict = Depends(get_admin_user)):
+    """Update vendor master page (admin)"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    
+    if update_data:
+        await db.venues.update_one({"id": vendor_id}, {"$set": update_data})
+    
+    logger.info(f"Vendor {vendor['name']} updated by admin {admin.get('username')}")
+    return {"success": True}
+
+@api_router.post("/admin/vendors/{vendor_id}/logo")
+async def admin_upload_vendor_logo(vendor_id: str, file: UploadFile = File(...), admin: dict = Depends(get_admin_user)):
+    """Upload vendor logo (admin)"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    path = f"{APP_NAME}/vendors/{vendor_id}/logo.{ext}"
+    data = await file.read()
+    
+    result = put_object(path, data, file.content_type)
+    await db.venues.update_one({"id": vendor_id}, {"$set": {"logo": result["path"]}})
+    
+    return {"path": result["path"]}
+
+@api_router.put("/admin/vendors/{vendor_id}/locations/{location_id}")
+async def admin_update_location(vendor_id: str, location_id: str, update: VenueLocationUpdate, admin: dict = Depends(get_admin_user)):
+    """Update a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.address is not None:
+        update_data["address"] = update.address
+    if update.zip_code is not None:
+        update_data["zip_code"] = update.zip_code
+    if update.phone is not None:
+        update_data["phone"] = update.phone
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    
+    if update_data:
+        await db.venue_locations.update_one({"id": location_id}, {"$set": update_data})
+    
+    return {"success": True}
+
+@api_router.delete("/admin/vendors/{vendor_id}/locations/{location_id}")
+async def admin_delete_location(vendor_id: str, location_id: str, admin: dict = Depends(get_admin_user)):
+    """Delete a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.delete_one({"id": location_id})
+    
+    # Remove from users' following
+    await db.users.update_many(
+        {"following_venues": location_id},
+        {"$pull": {"following_venues": location_id}}
+    )
+    
+    logger.info(f"Location {location['name']} deleted by admin {admin.get('username')}")
+    return {"success": True}
+
+@api_router.get("/admin/search-bartenders")
+async def admin_search_bartenders(username: str, admin: dict = Depends(get_admin_user)):
+    """Search bartenders by username (admin)"""
+    if len(username) < 2:
+        return []
+    
+    bartenders = await db.users.find(
+        {
+            "role": "bartender",
+            "username": {"$regex": username, "$options": "i"}
+        },
+        {"_id": 0, "password_hash": 0}
+    ).limit(10).to_list(10)
+    
+    return bartenders
+
+@api_router.get("/admin/vendors/{vendor_id}/locations/{location_id}/stars")
+async def admin_get_location_stars(vendor_id: str, location_id: str, admin: dict = Depends(get_admin_user)):
+    """Get stars for a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    star_ids = location.get("stars", [])
+    if not star_ids:
+        return []
+    
+    stars = await db.users.find(
+        {"id": {"$in": star_ids}},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    
+    return stars
+
+@api_router.post("/admin/vendors/{vendor_id}/locations/{location_id}/stars/{bartender_id}")
+async def admin_add_star(vendor_id: str, location_id: str, bartender_id: str, admin: dict = Depends(get_admin_user)):
+    """Add a star to a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    bartender = await db.users.find_one({"id": bartender_id, "role": "bartender"})
+    if not bartender:
+        raise HTTPException(status_code=404, detail="Bartender not found")
+    
+    if bartender_id in location.get("stars", []):
+        raise HTTPException(status_code=400, detail="Already a star")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$addToSet": {"stars": bartender_id}}
+    )
+    
+    logger.info(f"Bartender {bartender['username']} added as star by admin {admin.get('username')}")
+    return {"success": True}
+
+@api_router.delete("/admin/vendors/{vendor_id}/locations/{location_id}/stars/{bartender_id}")
+async def admin_remove_star(vendor_id: str, location_id: str, bartender_id: str, admin: dict = Depends(get_admin_user)):
+    """Remove a star from a location (admin)"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$pull": {"stars": bartender_id}}
+    )
+    
+    return {"success": True}
+
 # Include router and middleware
 app.include_router(api_router)
 

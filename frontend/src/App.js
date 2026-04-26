@@ -27,6 +27,7 @@ import VenuesPage from "./pages/VenuesPage";
 import VenueProfile from "./pages/VenueProfile";
 import VendorLogin from "./pages/VendorLogin";
 import VendorDashboard from "./pages/VendorDashboard";
+import AdminVendorManage from "./pages/AdminVendorManage";
 import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -212,6 +213,9 @@ const AppRoutes = () => {
       {/* Vendor Portal Routes (Web Only) */}
       <Route path="/vendor/login" element={<VendorLogin />} />
       <Route path="/vendor/dashboard" element={<VendorDashboard />} />
+      
+      {/* Admin Vendor Management */}
+      <Route path="/admin/vendor/:vendorId" element={<AdminVendorManage />} />
       
       {/* Public Pages */}
       <Route path="/privacy" element={<PrivacyPolicy />} />

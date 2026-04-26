@@ -592,6 +592,17 @@ The PourCircle Team`;
                         {/* Actions */}
                         <div className="flex gap-2 flex-wrap">
                           <Button
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/vendor/${v.id}`);
+                            }}
+                            className="btn-primary"
+                          >
+                            <Store className="w-4 h-4 mr-1" />
+                            Manage Vendor
+                          </Button>
+                          <Button
                             variant="outline"
                             size="sm"
                             onClick={(e) => {
