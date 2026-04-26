@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { API } from "../App";
+import { API, WEB_URL } from "../App";
 import axios from "axios";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -9,7 +10,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
   Store, MapPin, Clock, Menu, Users, LogOut, Camera, Plus, Trash2, 
-  Save, ChevronDown, Search, X, ExternalLink, Loader2, Building2
+  Save, ChevronDown, Search, X, ExternalLink, Loader2, Building2, QrCode, Download
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -47,6 +48,7 @@ const VendorDashboard = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   
   const fileInputRef = useRef(null);
+  const qrRef = useRef(null);
   const token = localStorage.getItem("pourcircle_vendor_token");
 
   useEffect(() => {
@@ -93,6 +95,52 @@ const VendorDashboard = () => {
     if (!path) return null;
     if (path.startsWith("http")) return path;
     return `https://emergent-apps.storage.googleapis.com/${path}`;
+  };
+
+  const getLocationUrl = (locationId) => {
+    const baseUrl = WEB_URL || window.location.origin;
+    return `${baseUrl}/venue/${locationId}`;
+  };
+
+  const downloadQRCode = (locationId, locationName) => {
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) {
+      toast.error("QR code not found");
+      return;
+    }
+
+    // Create a canvas to convert SVG to PNG
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    
+    // Set canvas size (larger for better print quality)
+    canvas.width = 1024;
+    canvas.height = 1024;
+    
+    img.onload = () => {
+      // Fill with white background
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw QR code centered with padding
+      const padding = 64;
+      ctx.drawImage(img, padding, padding, canvas.width - (padding * 2), canvas.height - (padding * 2));
+      
+      // Convert to PNG and download
+      const pngUrl = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.href = pngUrl;
+      downloadLink.download = `${locationName.replace(/\s+/g, '-').toLowerCase()}-qr-code.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      toast.success("QR code downloaded!");
+    };
+    
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
   };
 
   // ===================== MASTER PAGE FUNCTIONS =====================
@@ -782,6 +830,49 @@ const VendorDashboard = () => {
                     {(!locationData.menus || locationData.menus.length === 0) && (
                       <p className="text-white/40 text-sm italic">Using master page defaults</p>
                     )}
+                  </div>
+                </div>
+
+                {/* QR Code for Marketing */}
+                <div className="glass-card p-6">
+                  <h3 className="text-white font-semibold flex items-center gap-2 mb-4">
+                    <QrCode className="w-5 h-5 text-primary" />
+                    Marketing QR Code
+                  </h3>
+                  <p className="text-white/50 text-sm mb-4">
+                    Download this QR code for flyers, table tents, or signage. Customers can scan it to follow your location on PourCircle.
+                  </p>
+                  <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div 
+                      ref={qrRef}
+                      className="bg-white p-4 rounded-xl"
+                    >
+                      <QRCodeSVG
+                        value={getLocationUrl(selectedLocation.id)}
+                        size={160}
+                        level="H"
+                        includeMargin={false}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <div className="p-3 bg-white/5 rounded-lg">
+                        <p className="text-white/60 text-xs mb-1">Location URL</p>
+                        <p className="text-white text-sm break-all font-mono">
+                          {getLocationUrl(selectedLocation.id)}
+                        </p>
+                      </div>
+                      <Button 
+                        onClick={() => downloadQRCode(selectedLocation.id, `${vendor?.name}-${locationData.name || 'location'}`)}
+                        className="w-full btn-primary"
+                        data-testid="download-qr-btn"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download QR Code (PNG)
+                      </Button>
+                      <p className="text-white/40 text-xs text-center">
+                        High resolution (1024x1024) for print quality
+                      </p>
+                    </div>
                   </div>
                 </div>
 
