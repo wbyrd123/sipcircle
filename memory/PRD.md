@@ -84,6 +84,7 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - [x] **Bartender Profile → "Works At" section**: Shows venues where bartender is a Star with Follow buttons
 - [x] **Venue Profile → "The Stars" section**: Shows bartenders (Stars) with Follow buttons
 - [x] New API: `GET /api/bartender/{username}/venues` - Get venues where bartender is a Star
+- [x] **Star Added Notification**: Bartender receives push notification when added as a Star at a venue
 - [ ] Bartenders add work location (Google Maps or manual) - manual entry already exists
 
 ### Phase 5: Future Enhancements (NEXT)
@@ -179,3 +180,4 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
   - Venue Profile now shows Follow buttons next to Stars (bartenders)
   - Users can follow bartenders directly from venue profile
   - New API endpoint: `GET /api/bartender/{username}/venues`
+  - **Star Added Notification**: Bartenders now receive a push notification when they're added as a Star at a venue (both vendor and admin endpoints)

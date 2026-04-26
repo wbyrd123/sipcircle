@@ -2006,6 +2006,15 @@ async def vendor_add_star(location_id: str, bartender_id: str, vendor: dict = De
     )
     
     logger.info(f"Bartender {bartender['username']} added as Star to {location['name']} by vendor {vendor['name']}")
+    
+    # Send push notification to the bartender
+    asyncio.create_task(send_push_notification(
+        [bartender_id],
+        f"You're now a Star at {vendor['name']}!",
+        f"You've been added as a Star at {location['name']}. Your profile will now appear on their venue page.",
+        {"type": "star_added", "location_id": location_id, "venue_name": vendor['name']}
+    ))
+    
     return {"success": True, "message": f"{bartender['name']} added as Star"}
 
 @api_router.delete("/vendor/locations/{location_id}/stars/{bartender_id}")
@@ -2443,12 +2452,25 @@ async def admin_add_star(vendor_id: str, location_id: str, bartender_id: str, ad
     if bartender_id in location.get("stars", []):
         raise HTTPException(status_code=400, detail="Already a star")
     
+    # Get vendor name for notification
+    vendor = await db.venues.find_one({"id": vendor_id}, {"name": 1})
+    venue_name = vendor.get("name", "a venue") if vendor else "a venue"
+    
     await db.venue_locations.update_one(
         {"id": location_id},
         {"$addToSet": {"stars": bartender_id}}
     )
     
     logger.info(f"Bartender {bartender['username']} added as star by admin {admin.get('username')}")
+    
+    # Send push notification to the bartender
+    asyncio.create_task(send_push_notification(
+        [bartender_id],
+        f"You're now a Star at {venue_name}!",
+        f"You've been added as a Star at {location['name']}. Your profile will now appear on their venue page.",
+        {"type": "star_added", "location_id": location_id, "venue_name": venue_name}
+    ))
+    
     return {"success": True}
 
 @api_router.delete("/admin/vendors/{vendor_id}/locations/{location_id}/stars/{bartender_id}")
