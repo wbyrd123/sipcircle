@@ -433,6 +433,10 @@ class VenueLocationUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+class VendorLoginRequest(BaseModel):
+    identifier: str  # email or username
+    password: str
+
 # ===================== AUTH HELPERS =====================
 def validate_password(password: str) -> tuple[bool, str]:
     """
@@ -1617,17 +1621,14 @@ async def unfollow_venue_location(location_id: str, user: dict = Depends(get_cur
 # ===================== VENDOR ADMIN ENDPOINTS (for venue owners) =====================
 
 @api_router.post("/vendor/auth/login")
-async def vendor_login(identifier: str = "", password: str = ""):
+async def vendor_login(req: VendorLoginRequest):
     """Vendor login endpoint"""
-    if not identifier or not password:
-        raise HTTPException(status_code=400, detail="Missing credentials")
-    
     vendor = await db.venues.find_one(
-        {"$or": [{"email": identifier.lower()}, {"username": identifier.lower()}]},
+        {"$or": [{"email": req.identifier.lower()}, {"username": req.identifier.lower()}]},
         {"_id": 0}
     )
     
-    if not vendor or not verify_password(password, vendor.get("password_hash", "")):
+    if not vendor or not verify_password(req.password, vendor.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     if not vendor.get("is_active", True):
@@ -1643,6 +1644,242 @@ async def vendor_login(identifier: str = "", password: str = ""):
     vendor.pop("password_hash", None)
     
     return {"token": token, "vendor": vendor}
+
+# Vendor authentication helper
+async def get_current_vendor(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current vendor from JWT token"""
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        vendor_id = payload.get("vendor_id")
+        if not vendor_id:
+            raise HTTPException(status_code=401, detail="Invalid vendor token")
+        vendor = await db.venues.find_one({"id": vendor_id}, {"_id": 0})
+        if not vendor:
+            raise HTTPException(status_code=401, detail="Vendor not found")
+        if not vendor.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account is disabled")
+        return vendor
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# ===================== VENDOR SELF-SERVICE ENDPOINTS =====================
+
+@api_router.get("/vendor/me")
+async def get_vendor_profile(vendor: dict = Depends(get_current_vendor)):
+    """Get current vendor profile with all locations"""
+    vendor_data = {k: v for k, v in vendor.items() if k != "password_hash"}
+    locations = await db.venue_locations.find({"venue_id": vendor["id"]}, {"_id": 0}).to_list(100)
+    vendor_data["locations"] = locations
+    return vendor_data
+
+@api_router.put("/vendor/master")
+async def update_vendor_master(
+    name: Optional[str] = None,
+    hours: Optional[List[dict]] = None,
+    menus: Optional[List[dict]] = None,
+    vendor: dict = Depends(get_current_vendor)
+):
+    """Update vendor master page (defaults for all locations)"""
+    update_data = {}
+    if name is not None:
+        update_data["name"] = name
+    if hours is not None:
+        update_data["hours"] = hours
+    if menus is not None:
+        update_data["menus"] = menus
+    
+    if update_data:
+        await db.venues.update_one({"id": vendor["id"]}, {"$set": update_data})
+    
+    updated = await db.venues.find_one({"id": vendor["id"]}, {"_id": 0, "password_hash": 0})
+    return updated
+
+class VendorMasterUpdate(BaseModel):
+    name: Optional[str] = None
+    hours: Optional[List[dict]] = None
+    menus: Optional[List[dict]] = None
+
+@api_router.put("/vendor/master-page")
+async def update_vendor_master_page(update: VendorMasterUpdate, vendor: dict = Depends(get_current_vendor)):
+    """Update vendor master page (defaults for all locations)"""
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    
+    if update_data:
+        await db.venues.update_one({"id": vendor["id"]}, {"$set": update_data})
+    
+    updated = await db.venues.find_one({"id": vendor["id"]}, {"_id": 0, "password_hash": 0})
+    return updated
+
+@api_router.post("/vendor/logo")
+async def upload_vendor_logo(file: UploadFile = File(...), vendor: dict = Depends(get_current_vendor)):
+    """Upload vendor logo"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    path = f"{APP_NAME}/vendors/{vendor['id']}/logo.{ext}"
+    data = await file.read()
+    
+    result = put_object(path, data, file.content_type)
+    await db.venues.update_one({"id": vendor["id"]}, {"$set": {"logo": result["path"]}})
+    
+    return {"path": result["path"]}
+
+@api_router.post("/vendor/locations")
+async def vendor_add_location(req: VenueLocationCreate, vendor: dict = Depends(get_current_vendor)):
+    """Add a new location to vendor"""
+    location_id = str(uuid.uuid4())
+    
+    # Inherit master page defaults
+    location = {
+        "id": location_id,
+        "venue_id": vendor["id"],
+        "name": req.name,
+        "address": req.address,
+        "zip_code": req.zip_code,
+        "phone": req.phone,
+        "latitude": req.latitude,
+        "longitude": req.longitude,
+        "hours": [],  # Empty = use master defaults
+        "menus": [],  # Empty = use master defaults
+        "stars": [],
+        "followers": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.venue_locations.insert_one(location)
+    location.pop("_id", None)
+    
+    logger.info(f"Location {req.name} added by vendor {vendor['name']}")
+    return {"success": True, "location": location}
+
+@api_router.put("/vendor/locations/{location_id}")
+async def vendor_update_location(location_id: str, update: VenueLocationUpdate, vendor: dict = Depends(get_current_vendor)):
+    """Update a specific location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    update_data = {}
+    if update.name is not None:
+        update_data["name"] = update.name
+    if update.address is not None:
+        update_data["address"] = update.address
+    if update.zip_code is not None:
+        update_data["zip_code"] = update.zip_code
+    if update.phone is not None:
+        update_data["phone"] = update.phone
+    if update.hours is not None:
+        update_data["hours"] = update.hours
+    if update.menus is not None:
+        update_data["menus"] = update.menus
+    if update.latitude is not None:
+        update_data["latitude"] = update.latitude
+    if update.longitude is not None:
+        update_data["longitude"] = update.longitude
+    
+    if update_data:
+        await db.venue_locations.update_one({"id": location_id}, {"$set": update_data})
+    
+    updated = await db.venue_locations.find_one({"id": location_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/vendor/locations/{location_id}")
+async def vendor_delete_location(location_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Delete a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.delete_one({"id": location_id})
+    
+    # Remove location from users' following_venues
+    await db.users.update_many(
+        {"following_venues": location_id},
+        {"$pull": {"following_venues": location_id}}
+    )
+    
+    logger.info(f"Location {location['name']} deleted by vendor {vendor['name']}")
+    return {"success": True, "message": "Location deleted"}
+
+@api_router.get("/vendor/search-bartenders")
+async def vendor_search_bartenders(username: str, vendor: dict = Depends(get_current_vendor)):
+    """Search for bartenders by username to add as Stars"""
+    if len(username) < 2:
+        return []
+    
+    bartenders = await db.users.find(
+        {
+            "role": "bartender",
+            "username": {"$regex": username, "$options": "i"}
+        },
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).limit(10).to_list(10)
+    
+    return bartenders
+
+@api_router.post("/vendor/locations/{location_id}/stars/{bartender_id}")
+async def vendor_add_star(location_id: str, bartender_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Add a bartender as a Star to a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    bartender = await db.users.find_one({"id": bartender_id, "role": "bartender"})
+    if not bartender:
+        raise HTTPException(status_code=404, detail="Bartender not found")
+    
+    if bartender_id in location.get("stars", []):
+        raise HTTPException(status_code=400, detail="Bartender is already a Star at this location")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$addToSet": {"stars": bartender_id}}
+    )
+    
+    logger.info(f"Bartender {bartender['username']} added as Star to {location['name']} by vendor {vendor['name']}")
+    return {"success": True, "message": f"{bartender['name']} added as Star"}
+
+@api_router.delete("/vendor/locations/{location_id}/stars/{bartender_id}")
+async def vendor_remove_star(location_id: str, bartender_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Remove a bartender Star from a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    await db.venue_locations.update_one(
+        {"id": location_id},
+        {"$pull": {"stars": bartender_id}}
+    )
+    
+    logger.info(f"Bartender {bartender_id} removed as Star from {location['name']} by vendor {vendor['name']}")
+    return {"success": True, "message": "Star removed"}
+
+@api_router.get("/vendor/locations/{location_id}/stars")
+async def vendor_get_location_stars(location_id: str, vendor: dict = Depends(get_current_vendor)):
+    """Get all Stars (bartenders) for a location"""
+    location = await db.venue_locations.find_one({"id": location_id, "venue_id": vendor["id"]})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    star_ids = location.get("stars", [])
+    if not star_ids:
+        return []
+    
+    stars = await db.users.find(
+        {"id": {"$in": star_ids}},
+        {"_id": 0, "password_hash": 0, "reset_token": 0, "reset_token_expires": 0}
+    ).to_list(100)
+    
+    return stars
 
 # ===================== SUPER ADMIN: Create Vendors =====================
 
@@ -1723,6 +1960,22 @@ async def admin_toggle_vendor(vendor_id: str, admin: dict = Depends(get_admin_us
     await db.venues.update_one({"id": vendor_id}, {"$set": {"is_active": new_status}})
     
     return {"success": True, "is_active": new_status}
+
+class AdminResetVendorPassword(BaseModel):
+    password: str
+
+@api_router.put("/admin/vendors/{vendor_id}/reset-password")
+async def admin_reset_vendor_password(vendor_id: str, req: AdminResetVendorPassword, admin: dict = Depends(get_admin_user)):
+    """Reset vendor password (admin only)"""
+    vendor = await db.venues.find_one({"id": vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    new_hash = hash_password(req.password)
+    await db.venues.update_one({"id": vendor_id}, {"$set": {"password_hash": new_hash}})
+    
+    logger.info(f"Vendor {vendor['name']} password reset by admin {admin.get('username')}")
+    return {"success": True, "message": "Password reset successfully"}
 
 @api_router.post("/admin/vendors/{vendor_id}/locations")
 async def admin_add_location(vendor_id: str, req: VenueLocationCreate, admin: dict = Depends(get_admin_user)):

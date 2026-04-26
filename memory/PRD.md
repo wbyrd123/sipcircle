@@ -60,16 +60,17 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - [x] Profile page shows Following count (users + venues combined)
 - [x] Clicking Following card navigates to Followers page with `?tab=following` parameter
 
-### Phase 2: Vendor Dashboard + Self-Service (NEXT)
-- [ ] Vendor login (web only)
-- [ ] Master Page (logo, menus, hours)
-- [ ] Location dropdown
-- [ ] Add/edit locations
-- [ ] Add Stars (search bartender username)
-- [ ] Menus: manual entry OR website links
-- [ ] Admin access to view/edit all vendors
+### Phase 2: Vendor Dashboard + Self-Service ✅ COMPLETE
+- [x] Vendor login (web only) at `/vendor/login`
+- [x] Vendor Dashboard at `/vendor/dashboard`
+- [x] Master Page tab (logo, name, default hours, default menus)
+- [x] Locations tab (select location, edit details, override hours/menus)
+- [x] Add/edit/delete locations
+- [x] Stars tab (search bartenders by username, add to locations)
+- [x] Menu options: Link to website OR Manual entry
+- [x] Admin can reset vendor passwords
 
-### Phase 3: Push Notifications
+### Phase 3: Push Notifications (NEXT)
 - [ ] Firebase Cloud Messaging setup
 - [ ] Vendor → All followers (from Master)
 - [ ] Vendor → Specific location followers
@@ -131,13 +132,17 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 ```
 
 ## Key Files
-- `/app/backend/server.py` - All API endpoints including venue endpoints
+- `/app/backend/server.py` - All API endpoints including venue/vendor endpoints
 - `/app/frontend/src/pages/BartenderDashboard.jsx` - Home dashboard with stats
 - `/app/frontend/src/pages/BartenderProfile.jsx` - Bartender profile view
 - `/app/frontend/src/pages/VenuesPage.jsx` - Venue search page
 - `/app/frontend/src/pages/VenueProfile.jsx` - Venue location profile
 - `/app/frontend/src/pages/FollowersPage.jsx` - Updated with Following tab (People/Places)
+- `/app/frontend/src/pages/EditProfile.jsx` - Settings with Change Password
+- `/app/frontend/src/pages/VendorLogin.jsx` - Vendor portal login (NEW)
+- `/app/frontend/src/pages/VendorDashboard.jsx` - Vendor self-service dashboard (NEW)
 - `/app/frontend/src/components/BottomNav.jsx` - Updated with Venues icon
+- `/app/frontend/src/App.js` - Routes including vendor portal
 
 ## Changelog
 
@@ -149,3 +154,10 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - Fixed follower count discrepancy: Profile now counts only existing users (excludes deleted accounts)
 - **Added Change Password feature** in Settings with requirements: 8+ chars, 1 uppercase, 1 number
 - Password requirements now enforced on: Registration, Password Reset, Change Password
+- **Vendor Platform Phase 2 Complete:**
+  - Created `/vendor/login` and `/vendor/dashboard` routes
+  - Vendor Dashboard with 3 tabs: Master Page, Locations, Stars
+  - Master Page: logo upload, name, default hours, default menus
+  - Locations: add/edit/delete locations with hours/menu overrides
+  - Stars: search bartenders by username and link to locations
+  - Admin endpoint to reset vendor passwords

@@ -25,6 +25,8 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import VenuesPage from "./pages/VenuesPage";
 import VenueProfile from "./pages/VenueProfile";
+import VendorLogin from "./pages/VendorLogin";
+import VendorDashboard from "./pages/VendorDashboard";
 import SmartAppBanner from "./components/SmartAppBanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -206,6 +208,10 @@ const AppRoutes = () => {
       {/* Venue Routes */}
       <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
       <Route path="/venue/:locationId" element={<VenueProfile />} />
+      
+      {/* Vendor Portal Routes (Web Only) */}
+      <Route path="/vendor/login" element={<VendorLogin />} />
+      <Route path="/vendor/dashboard" element={<VendorDashboard />} />
       
       {/* Public Pages */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
