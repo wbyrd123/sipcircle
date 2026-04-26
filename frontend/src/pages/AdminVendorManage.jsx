@@ -13,6 +13,7 @@ import {
   Save, ChevronDown, Search, X, ExternalLink, Loader2, Building2, QrCode, Download, Shield
 } from "lucide-react";
 import { toast } from "sonner";
+import PlaceAutocomplete from "../components/PlaceAutocomplete";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
@@ -38,7 +39,8 @@ const AdminVendorManage = () => {
   // Location state
   const [locationData, setLocationData] = useState({});
   const [showAddLocation, setShowAddLocation] = useState(false);
-  const [newLocation, setNewLocation] = useState({ name: "", address: "", zip_code: "", phone: "" });
+  const [newLocation, setNewLocation] = useState({ name: "", address: "", zip_code: "", phone: "", latitude: null, longitude: null });
+  const [useManualAddress, setUseManualAddress] = useState(false);
   
   // Stars state
   const [searchQuery, setSearchQuery] = useState("");
@@ -216,7 +218,8 @@ const AdminVendorManage = () => {
       });
       toast.success("Location added");
       setShowAddLocation(false);
-      setNewLocation({ name: "", address: "", zip_code: "", phone: "" });
+      setNewLocation({ name: "", address: "", zip_code: "", phone: "", latitude: null, longitude: null });
+      setUseManualAddress(false);
       fetchVendorData();
     } catch (e) {
       toast.error("Failed to add location");
@@ -611,7 +614,7 @@ const AdminVendorManage = () => {
               <div className="glass-card p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-white font-semibold">Add New Location</h3>
-                  <button onClick={() => setShowAddLocation(false)} className="text-white/40 hover:text-white">
+                  <button onClick={() => { setShowAddLocation(false); setUseManualAddress(false); }} className="text-white/40 hover:text-white">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -634,15 +637,44 @@ const AdminVendorManage = () => {
                       placeholder="(555) 123-4567"
                     />
                   </div>
+                  
+                  {/* Address with Google Maps Autocomplete */}
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-white/80">Address *</Label>
-                    <Input
-                      value={newLocation.address}
-                      onChange={(e) => setNewLocation(prev => ({ ...prev, address: e.target.value }))}
-                      className="input-dark"
-                      placeholder="123 Main Street"
-                    />
+                    <div className="flex items-center justify-between">
+                      <Label className="text-white/80">Address *</Label>
+                      <button
+                        type="button"
+                        onClick={() => setUseManualAddress(!useManualAddress)}
+                        className="text-primary text-xs hover:underline"
+                      >
+                        {useManualAddress ? "Use search" : "Enter manually"}
+                      </button>
+                    </div>
+                    {useManualAddress ? (
+                      <Input
+                        value={newLocation.address}
+                        onChange={(e) => setNewLocation(prev => ({ ...prev, address: e.target.value }))}
+                        className="input-dark"
+                        placeholder="123 Main Street, City, State"
+                      />
+                    ) : (
+                      <PlaceAutocomplete
+                        placeholder="Search for address..."
+                        onPlaceSelect={(place) => {
+                          setNewLocation(prev => ({
+                            ...prev,
+                            address: place.address,
+                            latitude: place.lat,
+                            longitude: place.lng
+                          }));
+                        }}
+                      />
+                    )}
+                    {newLocation.address && !useManualAddress && (
+                      <p className="text-white/50 text-xs mt-1">Selected: {newLocation.address}</p>
+                    )}
                   </div>
+                  
                   <div className="space-y-2">
                     <Label className="text-white/80">ZIP Code *</Label>
                     <Input
