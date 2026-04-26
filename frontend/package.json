@@ -7,6 +7,7 @@
     "@capacitor/cli": "5",
     "@capacitor/core": "5",
     "@capacitor/ios": "5",
+    "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/splash-screen": "5",
     "@capacitor/status-bar": "5",
     "@hookform/resolvers": "^5.0.1",

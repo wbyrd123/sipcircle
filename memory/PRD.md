@@ -70,13 +70,17 @@ Social app connecting bartenders, bar-goers, and venues (restaurants/bars). Mobi
 - [x] Menu options: Link to website OR Manual entry
 - [x] Admin can reset vendor passwords
 
-### Phase 3: Push Notifications (NEXT)
-- [ ] Firebase Cloud Messaging setup
-- [ ] Vendor → All followers (from Master)
-- [ ] Vendor → Specific location followers
-- [ ] Invite sent → Notification to recipient
+### Phase 3: Push Notifications ✅ COMPLETE
+- [x] Firebase Cloud Messaging setup (firebase-admin SDK)
+- [x] Device token registration (POST /api/device-token)
+- [x] Vendor → All followers notification (Master Page, 1/week limit)
+- [x] Vendor → Specific location followers notification (2/month limit per location)
+- [x] Invite sent → Automatic notification to recipient
+- [x] Notification status API with rate limit tracking
+- [x] Frontend push notification handling (Capacitor plugin)
+- [ ] **USER ACTION REQUIRED**: Upload APNs key (.p8) to Firebase Console for iOS
 
-### Phase 4: Bartender Updates + Cross-Follow
+### Phase 4: Bartender Updates + Cross-Follow (NEXT)
 - [ ] Bartenders add work location (Google Maps or manual)
 - [ ] "Follow [Venue Name]" button on bartender profile (if at registered vendor)
 

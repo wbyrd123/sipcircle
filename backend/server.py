@@ -19,9 +19,21 @@ import requests
 import secrets
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Initialize Firebase Admin SDK
+firebase_cred_path = ROOT_DIR / 'firebase-admin.json'
+if firebase_cred_path.exists():
+    cred = credentials.Certificate(str(firebase_cred_path))
+    firebase_admin.initialize_app(cred)
+    firebase_initialized = True
+else:
+    firebase_initialized = False
+    logging.warning("Firebase Admin SDK credentials not found. Push notifications disabled.")
 
 # MongoDB connection with health tracking
 mongo_url = os.environ['MONGO_URL']
@@ -437,6 +449,15 @@ class VendorLoginRequest(BaseModel):
     identifier: str  # email or username
     password: str
 
+class DeviceTokenRequest(BaseModel):
+    token: str
+    platform: str  # "ios" or "android"
+
+class VendorNotificationRequest(BaseModel):
+    title: str
+    body: str
+    location_id: Optional[str] = None  # If None, send to all followers (Master)
+
 # ===================== AUTH HELPERS =====================
 def validate_password(password: str) -> tuple[bool, str]:
     """
@@ -495,6 +516,58 @@ async def get_optional_user(authorization: str = Header(None), auth: str = Query
         return user
     except:
         return None
+
+# ===================== PUSH NOTIFICATION HELPERS =====================
+async def send_push_notification(user_ids: List[str], title: str, body: str, data: dict = None):
+    """Send push notification to multiple users"""
+    if not firebase_initialized:
+        logger.warning("Firebase not initialized, skipping push notification")
+        return {"sent": 0, "failed": 0}
+    
+    # Get device tokens for all users
+    users = await db.users.find(
+        {"id": {"$in": user_ids}, "device_tokens": {"$exists": True, "$ne": []}},
+        {"device_tokens": 1}
+    ).to_list(1000)
+    
+    tokens = []
+    for user in users:
+        for token_info in user.get("device_tokens", []):
+            tokens.append(token_info.get("token"))
+    
+    if not tokens:
+        logger.info(f"No device tokens found for {len(user_ids)} users")
+        return {"sent": 0, "failed": 0}
+    
+    # Send notifications
+    sent = 0
+    failed = 0
+    
+    for token in tokens:
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body
+                ),
+                data=data or {},
+                token=token
+            )
+            messaging.send(message)
+            sent += 1
+        except messaging.UnregisteredError:
+            # Token is no longer valid, remove it
+            await db.users.update_many(
+                {"device_tokens.token": token},
+                {"$pull": {"device_tokens": {"token": token}}}
+            )
+            failed += 1
+        except Exception as e:
+            logger.error(f"Push notification error: {e}")
+            failed += 1
+    
+    logger.info(f"Push notifications sent: {sent}, failed: {failed}")
+    return {"sent": sent, "failed": failed}
 
 # ===================== AUTH ROUTES =====================
 @api_router.post("/auth/register", response_model=AuthResponse)
@@ -716,6 +789,38 @@ async def change_password(req: ChangePasswordRequest, user: dict = Depends(get_c
     
     logger.info(f"Password changed for user: {user['username']}")
     return {"message": "Password changed successfully"}
+
+# ===================== DEVICE TOKEN & NOTIFICATION ROUTES =====================
+@api_router.post("/device-token")
+async def register_device_token(req: DeviceTokenRequest, user: dict = Depends(get_current_user)):
+    """Register device token for push notifications"""
+    token_entry = {
+        "token": req.token,
+        "platform": req.platform,
+        "registered_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Remove old entry with same token (if exists) and add new one
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$pull": {"device_tokens": {"token": req.token}}}
+    )
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$push": {"device_tokens": token_entry}}
+    )
+    
+    logger.info(f"Device token registered for user {user['username']} ({req.platform})")
+    return {"success": True}
+
+@api_router.delete("/device-token")
+async def unregister_device_token(req: DeviceTokenRequest, user: dict = Depends(get_current_user)):
+    """Unregister device token (e.g., on logout)"""
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$pull": {"device_tokens": {"token": req.token}}}
+    )
+    return {"success": True}
 
 # ===================== PROFILE ROUTES =====================
 @api_router.put("/profile/bartender")
@@ -1298,6 +1403,18 @@ async def create_invite(invite: InviteCreate, user: dict = Depends(get_current_u
     }
     
     await db.invites.insert_one(invite_doc)
+    
+    # Send push notification to recipients
+    if invite.recipient_ids:
+        notification_title = f"{user['name']} invited you for drinks!"
+        notification_body = f"{invite.location_name} - {invite.datetime_str}"
+        asyncio.create_task(send_push_notification(
+            invite.recipient_ids,
+            notification_title,
+            notification_body,
+            {"type": "invite", "invite_id": invite_doc["id"]}
+        ))
+    
     return {"id": invite_doc["id"], "success": True}
 
 @api_router.get("/invites")
@@ -1880,6 +1997,150 @@ async def vendor_get_location_stars(location_id: str, vendor: dict = Depends(get
     ).to_list(100)
     
     return stars
+
+# ===================== VENDOR PUSH NOTIFICATIONS =====================
+
+# Rate limits: Master = 1/week, Location = 2/month
+MASTER_NOTIFICATION_COOLDOWN_DAYS = 7
+LOCATION_NOTIFICATION_COOLDOWN_DAYS = 15  # ~2 per month
+
+@api_router.get("/vendor/notification-status")
+async def get_vendor_notification_status(vendor: dict = Depends(get_current_vendor)):
+    """Get notification rate limit status for vendor"""
+    now = datetime.now(timezone.utc)
+    
+    # Master notification status
+    last_master = vendor.get("last_master_notification")
+    if last_master:
+        last_master_dt = datetime.fromisoformat(last_master.replace("Z", "+00:00"))
+        master_cooldown_end = last_master_dt + timedelta(days=MASTER_NOTIFICATION_COOLDOWN_DAYS)
+        master_available = now >= master_cooldown_end
+        master_next_available = master_cooldown_end.isoformat() if not master_available else None
+    else:
+        master_available = True
+        master_next_available = None
+    
+    # Location notification status
+    locations = await db.venue_locations.find({"venue_id": vendor["id"]}, {"_id": 0}).to_list(100)
+    location_status = []
+    for loc in locations:
+        last_notif = loc.get("last_notification")
+        if last_notif:
+            last_notif_dt = datetime.fromisoformat(last_notif.replace("Z", "+00:00"))
+            cooldown_end = last_notif_dt + timedelta(days=LOCATION_NOTIFICATION_COOLDOWN_DAYS)
+            available = now >= cooldown_end
+            next_available = cooldown_end.isoformat() if not available else None
+        else:
+            available = True
+            next_available = None
+        
+        location_status.append({
+            "id": loc["id"],
+            "name": loc["name"],
+            "notification_available": available,
+            "next_available": next_available,
+            "follower_count": len(loc.get("followers", []))
+        })
+    
+    # Count total followers across all locations
+    total_followers = set()
+    for loc in locations:
+        total_followers.update(loc.get("followers", []))
+    
+    return {
+        "master": {
+            "notification_available": master_available,
+            "next_available": master_next_available,
+            "total_follower_count": len(total_followers)
+        },
+        "locations": location_status
+    }
+
+@api_router.post("/vendor/send-notification")
+async def vendor_send_notification(req: VendorNotificationRequest, vendor: dict = Depends(get_current_vendor)):
+    """Send push notification to followers (Master or location-specific)"""
+    now = datetime.now(timezone.utc)
+    
+    if req.location_id:
+        # Location-specific notification
+        location = await db.venue_locations.find_one({"id": req.location_id, "venue_id": vendor["id"]})
+        if not location:
+            raise HTTPException(status_code=404, detail="Location not found")
+        
+        # Check rate limit
+        last_notif = location.get("last_notification")
+        if last_notif:
+            last_notif_dt = datetime.fromisoformat(last_notif.replace("Z", "+00:00"))
+            cooldown_end = last_notif_dt + timedelta(days=LOCATION_NOTIFICATION_COOLDOWN_DAYS)
+            if now < cooldown_end:
+                days_remaining = (cooldown_end - now).days + 1
+                raise HTTPException(
+                    status_code=429, 
+                    detail=f"Notification limit reached. Next available in {days_remaining} days."
+                )
+        
+        # Get followers for this location
+        follower_ids = location.get("followers", [])
+        if not follower_ids:
+            raise HTTPException(status_code=400, detail="No followers at this location")
+        
+        # Send notification
+        result = await send_push_notification(
+            follower_ids,
+            req.title,
+            req.body,
+            {"type": "vendor_notification", "vendor_id": vendor["id"], "location_id": req.location_id}
+        )
+        
+        # Update last notification timestamp
+        await db.venue_locations.update_one(
+            {"id": req.location_id},
+            {"$set": {"last_notification": now.isoformat()}}
+        )
+        
+        logger.info(f"Vendor {vendor['name']} sent notification to {len(follower_ids)} followers at {location['name']}")
+        return {"success": True, "recipients": len(follower_ids), **result}
+    
+    else:
+        # Master notification (all followers across all locations)
+        # Check rate limit
+        last_master = vendor.get("last_master_notification")
+        if last_master:
+            last_master_dt = datetime.fromisoformat(last_master.replace("Z", "+00:00"))
+            cooldown_end = last_master_dt + timedelta(days=MASTER_NOTIFICATION_COOLDOWN_DAYS)
+            if now < cooldown_end:
+                days_remaining = (cooldown_end - now).days + 1
+                raise HTTPException(
+                    status_code=429, 
+                    detail=f"Master notification limit reached. Next available in {days_remaining} days."
+                )
+        
+        # Get all followers across all locations
+        locations = await db.venue_locations.find({"venue_id": vendor["id"]}, {"_id": 0}).to_list(100)
+        all_follower_ids = set()
+        for loc in locations:
+            all_follower_ids.update(loc.get("followers", []))
+        
+        follower_ids = list(all_follower_ids)
+        if not follower_ids:
+            raise HTTPException(status_code=400, detail="No followers")
+        
+        # Send notification
+        result = await send_push_notification(
+            follower_ids,
+            req.title,
+            req.body,
+            {"type": "vendor_notification", "vendor_id": vendor["id"]}
+        )
+        
+        # Update last notification timestamp
+        await db.venues.update_one(
+            {"id": vendor["id"]},
+            {"$set": {"last_master_notification": now.isoformat()}}
+        )
+        
+        logger.info(f"Vendor {vendor['name']} sent master notification to {len(follower_ids)} followers")
+        return {"success": True, "recipients": len(follower_ids), **result}
 
 # ===================== SUPER ADMIN: Create Vendors =====================
 

@@ -3,6 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { Toaster } from "./components/ui/sonner";
+import { initPushNotifications } from "./utils/pushNotifications";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -86,6 +87,9 @@ const AuthProvider = ({ children }) => {
             headers: { Authorization: `Bearer ${token}` }
           });
           setUser(response.data);
+          
+          // Initialize push notifications after login
+          initPushNotifications(token);
         } catch (e) {
           console.error("Auth error:", e);
           localStorage.removeItem("pourcircle_token");

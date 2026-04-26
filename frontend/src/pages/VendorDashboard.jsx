@@ -10,7 +10,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { 
   Store, MapPin, Clock, Menu, Users, LogOut, Camera, Plus, Trash2, 
-  Save, ChevronDown, Search, X, ExternalLink, Loader2, Building2, QrCode, Download
+  Save, ChevronDown, Search, X, ExternalLink, Loader2, Building2, QrCode, Download, Bell, Send
 } from "lucide-react";
 import { toast } from "sonner";
 import PlaceAutocomplete from "../components/PlaceAutocomplete";
@@ -49,6 +49,13 @@ const VendorDashboard = () => {
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   
+  // Notification state
+  const [notificationStatus, setNotificationStatus] = useState(null);
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationBody, setNotificationBody] = useState("");
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [showNotificationForm, setShowNotificationForm] = useState(false);
+  
   const fileInputRef = useRef(null);
   const qrRef = useRef(null);
   const token = localStorage.getItem("pourcircle_vendor_token");
@@ -63,17 +70,20 @@ const VendorDashboard = () => {
 
   const fetchVendorData = async () => {
     try {
-      const response = await axios.get(`${API}/vendor/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setVendor(response.data);
-      setMasterName(response.data.name || "");
-      setMasterHours(response.data.hours || []);
-      setMasterMenus(response.data.menus || []);
+      const [vendorRes, notifRes] = await Promise.all([
+        axios.get(`${API}/vendor/me`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/vendor/notification-status`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
       
-      if (response.data.locations?.length > 0) {
-        setSelectedLocation(response.data.locations[0]);
-        setLocationData(response.data.locations[0]);
+      setVendor(vendorRes.data);
+      setMasterName(vendorRes.data.name || "");
+      setMasterHours(vendorRes.data.hours || []);
+      setMasterMenus(vendorRes.data.menus || []);
+      setNotificationStatus(notifRes.data);
+      
+      if (vendorRes.data.locations?.length > 0) {
+        setSelectedLocation(vendorRes.data.locations[0]);
+        setLocationData(vendorRes.data.locations[0]);
       }
     } catch (e) {
       if (e.response?.status === 401) {
@@ -279,6 +289,54 @@ const VendorDashboard = () => {
 
   const updateLocationData = (field, value) => {
     setLocationData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // ===================== NOTIFICATION FUNCTIONS =====================
+  const getTimeUntilAvailable = (isoString) => {
+    if (!isoString) return null;
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = date - now;
+    if (diffMs <= 0) return null;
+    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return `${days} day${days !== 1 ? 's' : ''}`;
+  };
+
+  const sendNotification = async (locationId = null) => {
+    if (!notificationTitle.trim() || !notificationBody.trim()) {
+      toast.error("Please enter a title and message");
+      return;
+    }
+    
+    setSendingNotification(true);
+    try {
+      const payload = {
+        title: notificationTitle,
+        body: notificationBody
+      };
+      if (locationId) {
+        payload.location_id = locationId;
+      }
+      
+      const response = await axios.post(`${API}/vendor/send-notification`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      toast.success(`Notification sent to ${response.data.recipients} followers!`);
+      setNotificationTitle("");
+      setNotificationBody("");
+      setShowNotificationForm(false);
+      
+      // Refresh notification status
+      const notifRes = await axios.get(`${API}/vendor/notification-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotificationStatus(notifRes.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to send notification");
+    } finally {
+      setSendingNotification(false);
+    }
   };
 
   const addLocationHours = () => {
@@ -610,6 +668,67 @@ const VendorDashboard = () => {
               </div>
             </div>
 
+            {/* Push Notifications - Master (All Followers) */}
+            <div className="glass-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-primary" />
+                  Send Notification to All Followers
+                </h2>
+                {notificationStatus?.master?.notification_available ? (
+                  <span className="px-2 py-1 bg-green-400/20 text-green-400 text-xs rounded-full">Available</span>
+                ) : (
+                  <span className="px-2 py-1 bg-orange-400/20 text-orange-400 text-xs rounded-full">
+                    Available in {getTimeUntilAvailable(notificationStatus?.master?.next_available)}
+                  </span>
+                )}
+              </div>
+              <p className="text-white/50 text-sm mb-4">
+                Send a push notification to all {notificationStatus?.master?.total_follower_count || 0} followers across all locations. 
+                <span className="text-white/40"> (Limit: 1 per week)</span>
+              </p>
+              
+              {notificationStatus?.master?.notification_available ? (
+                <div className="space-y-3">
+                  <Input
+                    value={notificationTitle}
+                    onChange={(e) => setNotificationTitle(e.target.value)}
+                    className="input-dark"
+                    placeholder="Notification title (e.g., Happy Hour Alert!)"
+                    maxLength={50}
+                  />
+                  <Textarea
+                    value={notificationBody}
+                    onChange={(e) => setNotificationBody(e.target.value)}
+                    className="input-dark"
+                    placeholder="Your message to followers..."
+                    rows={3}
+                    maxLength={200}
+                  />
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/40 text-xs">{notificationBody.length}/200 characters</span>
+                    <Button
+                      onClick={() => sendNotification(null)}
+                      disabled={sendingNotification || !notificationTitle.trim() || !notificationBody.trim()}
+                      className="btn-primary"
+                      data-testid="send-master-notification"
+                    >
+                      {sendingNotification ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 mr-2" />
+                      )}
+                      Send to All Followers
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-white/40 text-sm text-center py-4">
+                  You've already sent a notification this week. Next available: {getTimeUntilAvailable(notificationStatus?.master?.next_available)}
+                </p>
+              )}
+            </div>
+
             {/* Save Button */}
             <Button onClick={saveMasterPage} disabled={saving} className="w-full btn-primary" data-testid="save-master">
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
@@ -918,6 +1037,72 @@ const VendorDashboard = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Push Notification - Location Specific */}
+                {(() => {
+                  const locStatus = notificationStatus?.locations?.find(l => l.id === selectedLocation.id);
+                  return (
+                    <div className="glass-card p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-white font-semibold flex items-center gap-2">
+                          <Bell className="w-5 h-5 text-primary" />
+                          Send Notification to {locationData.name} Followers
+                        </h3>
+                        {locStatus?.notification_available ? (
+                          <span className="px-2 py-1 bg-green-400/20 text-green-400 text-xs rounded-full">Available</span>
+                        ) : (
+                          <span className="px-2 py-1 bg-orange-400/20 text-orange-400 text-xs rounded-full">
+                            Available in {getTimeUntilAvailable(locStatus?.next_available)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-white/50 text-sm mb-4">
+                        Notify {locStatus?.follower_count || 0} followers of this location.
+                        <span className="text-white/40"> (Limit: 2 per month)</span>
+                      </p>
+                      
+                      {locStatus?.notification_available ? (
+                        <div className="space-y-3">
+                          <Input
+                            value={notificationTitle}
+                            onChange={(e) => setNotificationTitle(e.target.value)}
+                            className="input-dark"
+                            placeholder="Notification title"
+                            maxLength={50}
+                          />
+                          <Textarea
+                            value={notificationBody}
+                            onChange={(e) => setNotificationBody(e.target.value)}
+                            className="input-dark"
+                            placeholder="Your message..."
+                            rows={3}
+                            maxLength={200}
+                          />
+                          <div className="flex justify-between items-center">
+                            <span className="text-white/40 text-xs">{notificationBody.length}/200 characters</span>
+                            <Button
+                              onClick={() => sendNotification(selectedLocation.id)}
+                              disabled={sendingNotification || !notificationTitle.trim() || !notificationBody.trim()}
+                              className="btn-primary"
+                              data-testid="send-location-notification"
+                            >
+                              {sendingNotification ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Send className="w-4 h-4 mr-2" />
+                              )}
+                              Send Notification
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-white/40 text-sm text-center py-4">
+                          Notification limit reached. Next available in {getTimeUntilAvailable(locStatus?.next_available)}.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Save & Delete Buttons */}
                 <div className="flex gap-3">
