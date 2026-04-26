@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { ArrowLeft, Trash2, Users, Flag, Search, Shield, RefreshCw, ShieldCheck, ShieldOff, Store, Plus, Copy, Check, X, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Trash2, Users, Flag, Search, Shield, RefreshCw, ShieldCheck, ShieldOff, Store, Plus, Copy, Check, X, Eye, EyeOff, ChevronDown, ChevronUp, MapPin, ExternalLink, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 const AdminPage = () => {
@@ -26,6 +26,9 @@ const AdminPage = () => {
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [createdVendor, setCreatedVendor] = useState(null);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [expandedVendor, setExpandedVendor] = useState(null);
+  const [vendorDetails, setVendorDetails] = useState(null);
+  const [loadingVendorDetails, setLoadingVendorDetails] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -132,6 +135,32 @@ const AdminPage = () => {
     } catch (e) {
       toast.error("Failed to update vendor status");
     }
+  };
+
+  const fetchVendorDetails = async (vendorId) => {
+    if (expandedVendor === vendorId) {
+      setExpandedVendor(null);
+      setVendorDetails(null);
+      return;
+    }
+    
+    setExpandedVendor(vendorId);
+    setLoadingVendorDetails(true);
+    try {
+      const response = await axios.get(`${API}/admin/vendors/${vendorId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setVendorDetails(response.data);
+    } catch (e) {
+      toast.error("Failed to load vendor details");
+    } finally {
+      setLoadingVendorDetails(false);
+    }
+  };
+
+  const getLocationUrl = (locationId) => {
+    const baseUrl = WEB_URL || window.location.origin;
+    return `${baseUrl}/venue/${locationId}`;
   };
 
   const getVendorLoginUrl = () => {
@@ -513,42 +542,115 @@ The PourCircle Team`;
           {/* Vendors List */}
           <div className="space-y-3">
             {vendors.map((v) => (
-              <div key={v.id} className="glass-card p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                      <Store className="w-6 h-6 text-primary" />
+              <div key={v.id} className="glass-card overflow-hidden">
+                {/* Vendor Header - Clickable */}
+                <button
+                  onClick={() => fetchVendorDetails(v.id)}
+                  className="w-full p-4 text-left hover:bg-white/5 transition-colors"
+                  data-testid={`vendor-expand-${v.id}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                        <Store className="w-6 h-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">{v.name}</p>
+                        <p className="text-white/60 text-sm">{v.email}</p>
+                        <p className="text-white/40 text-xs">@{v.username}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white font-medium">{v.name}</p>
-                      <p className="text-white/60 text-sm">{v.email}</p>
-                      <p className="text-white/40 text-xs">@{v.username}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          v.is_active !== false ? "bg-green-400/20 text-green-400" : "bg-red-400/20 text-red-400"
+                        }`}>
+                          {v.is_active !== false ? "Active" : "Disabled"}
+                        </span>
+                        <p className="text-white/40 text-xs mt-1">
+                          {v.location_count || 0} location{(v.location_count || 0) !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      {expandedVendor === v.id ? (
+                        <ChevronUp className="w-5 h-5 text-white/40" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-white/40" />
+                      )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      v.is_active !== false ? "bg-green-400/20 text-green-400" : "bg-red-400/20 text-red-400"
-                    }`}>
-                      {v.is_active !== false ? "Active" : "Disabled"}
-                    </span>
-                    <span className="text-white/40 text-xs">
-                      {v.location_count || 0} location{(v.location_count || 0) !== 1 ? "s" : ""}
-                    </span>
+                </button>
+
+                {/* Expanded Vendor Details */}
+                {expandedVendor === v.id && (
+                  <div className="border-t border-white/10 p-4 bg-white/5">
+                    {loadingVendorDetails ? (
+                      <div className="flex justify-center py-4">
+                        <RefreshCw className="w-5 h-5 text-primary animate-spin" />
+                      </div>
+                    ) : vendorDetails ? (
+                      <div className="space-y-4">
+                        {/* Actions */}
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleVendor(v.id, v.is_active !== false);
+                            }}
+                            className={v.is_active !== false 
+                              ? "border-red-400/30 text-red-400 hover:bg-red-400/10" 
+                              : "border-green-400/30 text-green-400 hover:bg-green-400/10"
+                            }
+                          >
+                            {v.is_active !== false ? "Disable Vendor" : "Enable Vendor"}
+                          </Button>
+                        </div>
+
+                        {/* Locations */}
+                        <div>
+                          <h4 className="text-white font-medium flex items-center gap-2 mb-3">
+                            <Building2 className="w-4 h-4 text-primary" />
+                            Locations ({vendorDetails.locations?.length || 0})
+                          </h4>
+                          {vendorDetails.locations?.length > 0 ? (
+                            <div className="space-y-2">
+                              {vendorDetails.locations.map((loc) => (
+                                <div 
+                                  key={loc.id} 
+                                  className="flex items-center justify-between p-3 bg-black/30 rounded-lg"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <MapPin className="w-4 h-4 text-primary" />
+                                    <div>
+                                      <p className="text-white font-medium text-sm">{loc.name}</p>
+                                      <p className="text-white/50 text-xs">{loc.address}</p>
+                                      <p className="text-white/40 text-xs">{loc.followers?.length || 0} followers</p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(getLocationUrl(loc.id), '_blank');
+                                    }}
+                                    className="border-white/20 text-white hover:bg-white/10"
+                                  >
+                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                    View Profile
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-white/40 text-sm">No locations added yet</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleToggleVendor(v.id, v.is_active !== false)}
-                    className={v.is_active !== false 
-                      ? "border-red-400/30 text-red-400 hover:bg-red-400/10" 
-                      : "border-green-400/30 text-green-400 hover:bg-green-400/10"
-                    }
-                  >
-                    {v.is_active !== false ? "Disable" : "Enable"}
-                  </Button>
-                </div>
+                )}
               </div>
             ))}
             {vendors.length === 0 && (

@@ -683,6 +683,17 @@ const VendorDashboard = () => {
             {/* Selected Location Edit */}
             {selectedLocation && !showAddLocation && (
               <div className="space-y-6">
+                {/* View Profile Button */}
+                <Button
+                  onClick={() => window.open(getLocationUrl(selectedLocation.id), '_blank')}
+                  variant="outline"
+                  className="w-full border-primary/30 text-primary hover:bg-primary/10"
+                  data-testid="view-location-profile"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View Public Profile
+                </Button>
+
                 {/* Basic Info */}
                 <div className="glass-card p-6 space-y-4">
                   <h3 className="text-white font-semibold flex items-center gap-2">
