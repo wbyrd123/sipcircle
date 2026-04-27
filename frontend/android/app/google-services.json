@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "858236021752",
+    "project_id": "pourcircle-78aba",
+    "storage_bucket": "pourcircle-78aba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:858236021752:android:8f3ab8140efba81abb840d",
+        "android_client_info": {
+          "package_name": "com.pourcircle.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzbf1ADrjWUuX8OcvfWsun2sPTeOUeeSw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

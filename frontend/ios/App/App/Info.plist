@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>SipCircle</string>
+	<string>PourCircle</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,5 +45,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PourCircle needs access to your photos to upload profile pictures.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PourCircle needs camera access to take profile photos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>PourCircle needs permission to save photos to your library.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>PourCircle uses your location to help find nearby venues for meetups.</string>
 </dict>
 </plist>
